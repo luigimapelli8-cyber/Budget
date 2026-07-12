@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: projects
+    description: Project operations
+  - name: withdrawals
+    description: Withdrawal operations
 paths:
   /healthz:
     get:
@@ -24,6 +28,186 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List projects
+      description: Returns all projects with a computed final balance and withdrawal count
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectSummary"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSummary"
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project with its withdrawals
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project's name and/or starting amount
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSummary"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project and its withdrawals
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+  /projects/{id}/withdrawals:
+    get:
+      operationId: listWithdrawals
+      tags: [withdrawals]
+      summary: List withdrawals for a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of withdrawals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Withdrawal"
+        "404":
+          description: Not found
+    post:
+      operationId: createWithdrawal
+      tags: [withdrawals]
+      summary: Add a withdrawal to a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawalInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Withdrawal"
+        "404":
+          description: Not found
+  /withdrawals/{id}:
+    patch:
+      operationId: updateWithdrawal
+      tags: [withdrawals]
+      summary: Update a withdrawal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawalUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Withdrawal"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteWithdrawal
+      tags: [withdrawals]
+      summary: Delete a withdrawal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
 components:
   schemas:
     HealthStatus:
@@ -33,4 +217,85 @@ components:
           type: string
       required:
         - status
-
+    ProjectInput:
+      type: object
+      required: [name, startingAmount]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        startingAmount:
+          type: number
+    ProjectUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        startingAmount:
+          type: number
+    ProjectSummary:
+      type: object
+      required:
+        [id, name, startingAmount, finalBalance, withdrawalCount, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        startingAmount:
+          type: number
+        finalBalance:
+          type: number
+        withdrawalCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+    ProjectDetail:
+      type: object
+      required: [id, name, startingAmount, createdAt, withdrawals]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        startingAmount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        withdrawals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Withdrawal"
+    Withdrawal:
+      type: object
+      required: [id, projectId, amount, url, createdAt]
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        amount:
+          type: number
+        url:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    WithdrawalInput:
+      type: object
+      required: [amount, url]
+      properties:
+        amount:
+          type: number
+        url:
+          type: string
+    WithdrawalUpdate:
+      type: object
+      properties:
+        amount:
+          type: number
+        url:
+          type: string
