@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Suivi de retraits"
+version = "1.0.0"
+id = "artifacts/suivi-retraits"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25167
+
+[services.development]
+run = "pnpm --filter @workspace/suivi-retraits run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/suivi-retraits", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/suivi-retraits/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25167"
+BASE_PATH = "/"
