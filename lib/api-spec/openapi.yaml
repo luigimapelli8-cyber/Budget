@@ -14,6 +14,8 @@ tags:
     description: Project operations
   - name: withdrawals
     description: Withdrawal operations
+  - name: partners
+    description: Partner (linked account) operations
 paths:
   /healthz:
     get:
@@ -167,6 +169,27 @@ paths:
                 $ref: "#/components/schemas/Withdrawal"
         "404":
           description: Not found
+  /partners/search:
+    get:
+      operationId: searchPartners
+      tags: [partners]
+      summary: Search other users who already have an account, to link as a partner
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Partner"
   /withdrawals/{id}:
     patch:
       operationId: updateWithdrawal
@@ -269,9 +292,55 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Withdrawal"
+    TransactionType:
+      type: string
+      enum: [withdrawal, deposit]
+      description: Whether the entry withdraws money from the project or adds money to it
+    PaymentMethod:
+      type: string
+      enum:
+        [
+          carte_debit,
+          cheque,
+          virement,
+          cash,
+          cheque_vacances,
+          carte_resto,
+          autre,
+        ]
+      description: >
+        French payment methods: debit card, cheque, bank transfer, cash,
+        holiday voucher (Chèque-Vacances), meal/restaurant card (Carte
+        Resto / Pass), other
+    Partner:
+      type: object
+      required: [id, name, imageUrl]
+      properties:
+        id:
+          type: string
+          description: Clerk user id
+        name:
+          type: string
+        email:
+          type: string
+        imageUrl:
+          type: string
+          description: Profile photo URL (e.g. from Google sign-in)
     Withdrawal:
       type: object
-      required: [id, projectId, title, amount, url, createdAt]
+      required:
+        [
+          id,
+          projectId,
+          title,
+          type,
+          amount,
+          url,
+          date,
+          paymentMethod,
+          partner,
+          createdAt,
+        ]
       properties:
         id:
           type: integer
@@ -279,10 +348,21 @@ components:
           type: integer
         title:
           type: string
+        type:
+          $ref: "#/components/schemas/TransactionType"
         amount:
           type: number
         url:
           type: string
+        date:
+          type: string
+          format: date-time
+        paymentMethod:
+          $ref: "#/components/schemas/PaymentMethod"
+        partner:
+          anyOf:
+            - $ref: "#/components/schemas/Partner"
+            - type: "null"
         createdAt:
           type: string
           format: date-time
@@ -292,16 +372,36 @@ components:
       properties:
         title:
           type: string
+        type:
+          $ref: "#/components/schemas/TransactionType"
         amount:
           type: number
         url:
           type: string
+        date:
+          type: string
+          format: date-time
+        paymentMethod:
+          $ref: "#/components/schemas/PaymentMethod"
+        partnerUserId:
+          type: string
+          nullable: true
     WithdrawalUpdate:
       type: object
       properties:
         title:
           type: string
+        type:
+          $ref: "#/components/schemas/TransactionType"
         amount:
           type: number
         url:
           type: string
+        date:
+          type: string
+          format: date-time
+        paymentMethod:
+          $ref: "#/components/schemas/PaymentMethod"
+        partnerUserId:
+          type: string
+          nullable: true

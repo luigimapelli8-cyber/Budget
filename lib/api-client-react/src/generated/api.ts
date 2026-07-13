@@ -21,10 +21,12 @@ import type {
 
 import type {
   HealthStatus,
+  Partner,
   ProjectDetail,
   ProjectInput,
   ProjectSummary,
   ProjectUpdate,
+  SearchPartnersParams,
   Withdrawal,
   WithdrawalInput,
   WithdrawalUpdate
@@ -652,6 +654,90 @@ export const useCreateWithdrawal = <TError = ErrorType<void>,
       > => {
       return useMutation(getCreateWithdrawalMutationOptions(options));
     }
+
+export const getSearchPartnersUrl = (params: SearchPartnersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/partners/search?${stringifiedParams}` : `/api/partners/search`
+}
+
+/**
+ * @summary Search other users who already have an account, to link as a partner
+ */
+export const searchPartners = async (params: SearchPartnersParams, options?: RequestInit): Promise<Partner[]> => {
+
+  return customFetch<Partner[]>(getSearchPartnersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSearchPartnersQueryKey = (params?: SearchPartnersParams,) => {
+    return [
+    `/api/partners/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchPartnersQueryOptions = <TData = Awaited<ReturnType<typeof searchPartners>>, TError = ErrorType<unknown>>(params: SearchPartnersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchPartners>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchPartnersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchPartners>>> = ({ signal }) => searchPartners(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchPartners>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type SearchPartnersQueryResult = NonNullable<Awaited<ReturnType<typeof searchPartners>>>
+export type SearchPartnersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Search other users who already have an account, to link as a partner
+ */
+
+export function useSearchPartners<TData = Awaited<ReturnType<typeof searchPartners>>, TError = ErrorType<unknown>>(
+ params: SearchPartnersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchPartners>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getSearchPartnersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getUpdateWithdrawalUrl = (id: number,) => {
 

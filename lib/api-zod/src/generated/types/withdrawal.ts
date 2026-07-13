@@ -5,12 +5,19 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Partner } from './partner';
+import type { PaymentMethod } from './paymentMethod';
+import type { TransactionType } from './transactionType';
 
 export interface Withdrawal {
   id: number;
   projectId: number;
   title: string;
+  type: TransactionType;
   amount: number;
   url: string;
+  date: Date;
+  paymentMethod: PaymentMethod;
+  partner: Partner | null;
   createdAt: Date;
 }

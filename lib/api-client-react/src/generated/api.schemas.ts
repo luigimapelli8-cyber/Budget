@@ -30,12 +30,52 @@ export interface ProjectSummary {
   createdAt: string;
 }
 
+/**
+ * Whether the entry withdraws money from the project or adds money to it
+ */
+export type TransactionType = typeof TransactionType[keyof typeof TransactionType];
+
+
+export const TransactionType = {
+  withdrawal: 'withdrawal',
+  deposit: 'deposit',
+} as const;
+
+/**
+ * French payment methods: debit card, cheque, bank transfer, cash, holiday voucher (Chèque-Vacances), meal/restaurant card (Carte Resto / Pass), other
+ */
+export type PaymentMethod = typeof PaymentMethod[keyof typeof PaymentMethod];
+
+
+export const PaymentMethod = {
+  carte_debit: 'carte_debit',
+  cheque: 'cheque',
+  virement: 'virement',
+  cash: 'cash',
+  cheque_vacances: 'cheque_vacances',
+  carte_resto: 'carte_resto',
+  autre: 'autre',
+} as const;
+
+export interface Partner {
+  /** Clerk user id */
+  id: string;
+  name: string;
+  email?: string;
+  /** Profile photo URL (e.g. from Google sign-in) */
+  imageUrl: string;
+}
+
 export interface Withdrawal {
   id: number;
   projectId: number;
   title: string;
+  type: TransactionType;
   amount: number;
   url: string;
+  date: string;
+  paymentMethod: PaymentMethod;
+  partner: Partner | null;
   createdAt: string;
 }
 
@@ -49,13 +89,28 @@ export interface ProjectDetail {
 
 export interface WithdrawalInput {
   title: string;
+  type?: TransactionType;
   amount: number;
   url: string;
+  date?: string;
+  paymentMethod?: PaymentMethod;
+  partnerUserId?: string | null;
 }
 
 export interface WithdrawalUpdate {
   title?: string;
+  type?: TransactionType;
   amount?: number;
   url?: string;
+  date?: string;
+  paymentMethod?: PaymentMethod;
+  partnerUserId?: string | null;
 }
+
+export type SearchPartnersParams = {
+/**
+ * @minLength 1
+ */
+q: string;
+};
 

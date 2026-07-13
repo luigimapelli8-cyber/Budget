@@ -7,10 +7,14 @@
  */
 
 export * from './healthStatus';
+export * from './partner';
+export * from './paymentMethod';
 export * from './projectDetail';
 export * from './projectInput';
 export * from './projectSummary';
 export * from './projectUpdate';
+export * from './searchPartnersParams';
+export * from './transactionType';
 export * from './withdrawal';
 export * from './withdrawalInput';
 export * from './withdrawalUpdate';

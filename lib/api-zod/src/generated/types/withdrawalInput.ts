@@ -5,9 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PaymentMethod } from './paymentMethod';
+import type { TransactionType } from './transactionType';
 
 export interface WithdrawalInput {
   title: string;
+  type?: TransactionType;
   amount: number;
   url: string;
+  date?: Date;
+  paymentMethod?: PaymentMethod;
+  partnerUserId?: string | null;
 }

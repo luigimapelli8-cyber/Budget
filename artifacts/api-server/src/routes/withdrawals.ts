@@ -13,6 +13,7 @@ import {
   DeleteWithdrawalParams,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth";
+import { getPartnersByIds } from "../lib/partners";
 
 const router: IRouter = Router();
 
@@ -40,7 +41,9 @@ router.get("/projects/:id/withdrawals", async (req, res): Promise<void> => {
     .select()
     .from(withdrawalsTable)
     .where(eq(withdrawalsTable.projectId, params.data.id))
-    .orderBy(withdrawalsTable.createdAt);
+    .orderBy(withdrawalsTable.date);
+
+  const partnersById = await getPartnersByIds(withdrawals.map((w) => w.partnerUserId));
 
   res.json(
     ListWithdrawalsResponse.parse(
@@ -48,8 +51,12 @@ router.get("/projects/:id/withdrawals", async (req, res): Promise<void> => {
         id: w.id,
         projectId: w.projectId,
         title: w.title,
+        type: w.type,
         amount: Number(w.amount),
         url: w.url,
+        date: w.date,
+        paymentMethod: w.paymentMethod,
+        partner: w.partnerUserId ? partnersById.get(w.partnerUserId) ?? null : null,
         createdAt: w.createdAt,
       })),
     ),
@@ -85,8 +92,12 @@ router.post("/projects/:id/withdrawals", async (req, res): Promise<void> => {
     .values({
       projectId: params.data.id,
       title: parsed.data.title,
+      type: parsed.data.type ?? "withdrawal",
       amount: parsed.data.amount.toString(),
       url: parsed.data.url,
+      date: parsed.data.date ?? new Date(),
+      paymentMethod: parsed.data.paymentMethod ?? "cash",
+      partnerUserId: parsed.data.partnerUserId ?? null,
     })
     .returning();
 
@@ -95,13 +106,21 @@ router.post("/projects/:id/withdrawals", async (req, res): Promise<void> => {
     return;
   }
 
+  const partnersById = await getPartnersByIds([withdrawal.partnerUserId]);
+
   res.status(201).json(
     CreateWithdrawalResponse.parse({
       id: withdrawal.id,
       projectId: withdrawal.projectId,
       title: withdrawal.title,
+      type: withdrawal.type,
       amount: Number(withdrawal.amount),
       url: withdrawal.url,
+      date: withdrawal.date,
+      paymentMethod: withdrawal.paymentMethod,
+      partner: withdrawal.partnerUserId
+        ? partnersById.get(withdrawal.partnerUserId) ?? null
+        : null,
       createdAt: withdrawal.createdAt,
     }),
   );
@@ -141,10 +160,22 @@ router.patch("/withdrawals/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const updates: { title?: string; amount?: string; url?: string } = {};
+  const updates: {
+    title?: string;
+    type?: string;
+    amount?: string;
+    url?: string;
+    date?: Date;
+    paymentMethod?: string;
+    partnerUserId?: string | null;
+  } = {};
   if (parsed.data.title !== undefined) updates.title = parsed.data.title;
+  if (parsed.data.type !== undefined) updates.type = parsed.data.type;
   if (parsed.data.amount !== undefined) updates.amount = parsed.data.amount.toString();
   if (parsed.data.url !== undefined) updates.url = parsed.data.url;
+  if (parsed.data.date !== undefined) updates.date = parsed.data.date;
+  if (parsed.data.paymentMethod !== undefined) updates.paymentMethod = parsed.data.paymentMethod;
+  if (parsed.data.partnerUserId !== undefined) updates.partnerUserId = parsed.data.partnerUserId;
 
   const [withdrawal] = await db
     .update(withdrawalsTable)
@@ -157,13 +188,21 @@ router.patch("/withdrawals/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const partnersById = await getPartnersByIds([withdrawal.partnerUserId]);
+
   res.json(
     UpdateWithdrawalResponse.parse({
       id: withdrawal.id,
       projectId: withdrawal.projectId,
       title: withdrawal.title,
+      type: withdrawal.type,
       amount: Number(withdrawal.amount),
       url: withdrawal.url,
+      date: withdrawal.date,
+      paymentMethod: withdrawal.paymentMethod,
+      partner: withdrawal.partnerUserId
+        ? partnersById.get(withdrawal.partnerUserId) ?? null
+        : null,
       createdAt: withdrawal.createdAt,
     }),
   );

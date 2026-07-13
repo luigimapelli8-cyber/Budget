@@ -20,12 +20,17 @@ import {
   Loader2,
   Link as LinkIcon,
   Receipt,
-  Minus,
   ArrowLeft,
   BookOpen,
   Pencil,
   LogOut,
   Tag,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  CalendarDays,
+  Wallet,
+  UserSearch,
+  X,
 } from 'lucide-react';
 import NotFound from '@/pages/not-found';
 import {
@@ -37,10 +42,22 @@ import {
   useCreateWithdrawal,
   useUpdateWithdrawal,
   useDeleteWithdrawal,
+  useSearchPartners,
   getGetProjectQueryKey,
   getListProjectsQueryKey,
+  getSearchPartnersQueryKey,
 } from '@workspace/api-client-react';
+import type { Partner, PaymentMethod, TransactionType } from '@workspace/api-client-react';
 import { queryClient } from '@/lib/queryClient';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ---------------------------------------------------------------------------
 // Clerk wiring — copied verbatim per clerk-auth skill conventions.
@@ -212,6 +229,154 @@ const formatDate = (iso: string) => {
     year: 'numeric',
   });
 };
+
+// Transaction dates are stored as timestamps but only the calendar day matters here,
+// so both the <input type="date"> value and the display use UTC to avoid off-by-one
+// day shifts from the browser's local timezone.
+const dateToInputValue = (date: Date | string) => new Date(date).toISOString().slice(0, 10);
+
+const formatDateShort = (date: Date | string) =>
+  new Date(date).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  carte_debit: 'Carte de débit',
+  cheque: 'Chèque',
+  virement: 'Virement',
+  cash: 'Cash / Liquide',
+  cheque_vacances: 'Chèque vacances',
+  carte_resto: 'Carte resto / Pass',
+  autre: 'Autre',
+};
+
+const PAYMENT_METHOD_OPTIONS = Object.entries(PAYMENT_METHOD_LABELS) as [PaymentMethod, string][];
+
+function partnerInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
+
+// Search-and-select field to link a transaction to another real account on the
+// site (found by email), showing their Google profile photo when available.
+function PartnerPicker({
+  value,
+  onChange,
+}: {
+  value: Partner | null;
+  onChange: (partner: Partner | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const setDebouncedQueryLater = useDebouncedCallback(setDebouncedQuery, 300);
+
+  const { data: results, isFetching } = useSearchPartners(
+    { q: debouncedQuery },
+    {
+      query: {
+        enabled: debouncedQuery.trim().length >= 2,
+        queryKey: getSearchPartnersQueryKey({ q: debouncedQuery }),
+      },
+    },
+  );
+
+  if (value) {
+    return (
+      <div className="flex items-center gap-2 bg-muted/40 rounded-full pl-1 pr-2 py-1 w-fit max-w-full">
+        <Avatar className="h-6 w-6">
+          <AvatarImage src={value.imageUrl} alt={value.name} />
+          <AvatarFallback className="text-[10px] font-semibold">
+            {partnerInitials(value.name)}
+          </AvatarFallback>
+        </Avatar>
+        <span className="text-sm font-medium text-foreground truncate max-w-[9rem]">
+          {value.name}
+        </span>
+        <button
+          onClick={() => onChange(null)}
+          className="text-muted-foreground/60 hover:text-destructive transition-colors"
+          title="Retirer le partenaire"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+          <UserSearch className="w-4 h-4" />
+          Associer un partenaire
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-2">
+        <input
+          autoFocus
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setDebouncedQueryLater(e.target.value);
+          }}
+          placeholder="Rechercher par e-mail..."
+          className="w-full px-3 py-2 text-sm bg-muted/40 rounded-lg outline-none focus:ring-1 focus:ring-primary"
+        />
+        <div className="mt-2 max-h-60 overflow-y-auto space-y-1">
+          {isFetching && (
+            <div className="flex items-center justify-center py-4 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+            </div>
+          )}
+          {!isFetching && debouncedQuery.trim().length >= 2 && results?.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              Aucun compte trouvé pour "{debouncedQuery}".
+            </p>
+          )}
+          {!isFetching && debouncedQuery.trim().length < 2 && (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              Tape au moins 2 caractères de l'e-mail du partenaire.
+            </p>
+          )}
+          {results?.map((partner) => (
+            <button
+              key={partner.id}
+              onClick={() => {
+                onChange(partner);
+                setOpen(false);
+                setQuery('');
+                setDebouncedQuery('');
+              }}
+              className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-muted/60 transition-colors text-left"
+            >
+              <Avatar className="h-7 w-7">
+                <AvatarImage src={partner.imageUrl} alt={partner.name} />
+                <AvatarFallback className="text-[10px] font-semibold">
+                  {partnerInitials(partner.name)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <div className="text-sm font-medium truncate">{partner.name}</div>
+                {partner.email && (
+                  <div className="text-xs text-muted-foreground truncate">{partner.email}</div>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function useDebouncedCallback<T extends (...args: never[]) => void>(callback: T, delay: number) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -513,6 +678,10 @@ type RowState = {
   title: string;
   url: string;
   amount: string;
+  type: TransactionType;
+  date: string; // yyyy-mm-dd, see dateToInputValue
+  paymentMethod: PaymentMethod;
+  partner: Partner | null;
 };
 
 function ProjectPage() {
@@ -548,6 +717,10 @@ function ProjectPage() {
         title: w.title,
         url: w.url,
         amount: String(w.amount),
+        type: w.type,
+        date: dateToInputValue(w.date),
+        paymentMethod: w.paymentMethod,
+        partner: w.partner,
       })),
     );
   }, [project]);
@@ -580,13 +753,27 @@ function ProjectPage() {
     600,
   );
 
+  // Non-debounced: used for discrete field changes (type toggle, date, payment
+  // method, partner) that don't benefit from waiting for the user to stop typing.
+  const patchWithdrawal = (
+    id: number,
+    data: Partial<{
+      type: TransactionType;
+      date: string;
+      paymentMethod: PaymentMethod;
+      partnerUserId: string | null;
+    }>,
+  ) => {
+    updateWithdrawal.mutate({ id, data }, { onSuccess: invalidate });
+  };
+
   const startingValue = parseFloat(startingAmount) || 0;
 
   const rowsWithBalance = useMemo(() => {
     let currentBalance = startingValue;
     return rows.map((row) => {
       const amount = parseFloat(row.amount) || 0;
-      currentBalance -= amount;
+      currentBalance += row.type === 'deposit' ? amount : -amount;
       return { ...row, balanceAfter: currentBalance };
     });
   }, [rows, startingValue]);
@@ -595,11 +782,24 @@ function ProjectPage() {
     rowsWithBalance.length > 0 ? rowsWithBalance[rowsWithBalance.length - 1].balanceAfter : startingValue;
 
   const addRow = () => {
+    const today = dateToInputValue(new Date());
     createWithdrawal.mutate(
-      { id: projectId, data: { title: '', amount: 0, url: '' } },
+      { id: projectId, data: { title: '', amount: 0, url: '', type: 'withdrawal', paymentMethod: 'cash' } },
       {
         onSuccess: (withdrawal) => {
-          setRows((prev) => [...prev, { id: withdrawal.id, title: '', url: '', amount: '0' }]);
+          setRows((prev) => [
+            ...prev,
+            {
+              id: withdrawal.id,
+              title: '',
+              url: '',
+              amount: '0',
+              type: 'withdrawal',
+              date: today,
+              paymentMethod: 'cash',
+              partner: null,
+            },
+          ]);
           invalidate();
         },
       },
@@ -614,6 +814,27 @@ function ProjectPage() {
   const updateRow = (id: number, field: 'title' | 'url' | 'amount', value: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
     saveWithdrawal(id, field, value);
+  };
+
+  const updateRowType = (id: number, type: TransactionType) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, type } : r)));
+    patchWithdrawal(id, { type });
+  };
+
+  const updateRowDate = (id: number, date: string) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, date } : r)));
+    if (!date) return;
+    patchWithdrawal(id, { date: new Date(`${date}T00:00:00.000Z`).toISOString() });
+  };
+
+  const updateRowPaymentMethod = (id: number, paymentMethod: PaymentMethod) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, paymentMethod } : r)));
+    patchWithdrawal(id, { paymentMethod });
+  };
+
+  const updateRowPartner = (id: number, partner: Partner | null) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, partner } : r)));
+    patchWithdrawal(id, { partnerUserId: partner?.id ?? null });
   };
 
   const handleDeleteProject = () => {
@@ -642,7 +863,7 @@ function ProjectPage() {
           import('jspdf'),
           import('jspdf-autotable'),
         ]);
-        const doc = new jsPDF();
+        const doc = new jsPDF({ orientation: 'landscape' });
 
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(22);
@@ -663,25 +884,42 @@ function ProjectPage() {
         doc.setTextColor(77, 128, 92);
         doc.text(`Somme de départ : ${formatCurrency(startingValue)}`, 14, 45);
 
-        const tableBody = rowsWithBalance.map((row, idx) => [
-          (idx + 1).toString().padStart(2, '0'),
-          row.title || '—',
-          row.url || '—',
-          `- ${formatCurrency(parseFloat(row.amount) || 0)}`,
-          formatCurrency(row.balanceAfter),
-        ]);
+        const tableBody = rowsWithBalance.map((row, idx) => {
+          const amount = parseFloat(row.amount) || 0;
+          const isDeposit = row.type === 'deposit';
+          return [
+            (idx + 1).toString().padStart(2, '0'),
+            formatDateShort(new Date(`${row.date}T00:00:00.000Z`)),
+            row.title || '—',
+            isDeposit ? 'Ajout' : 'Retrait',
+            row.url || '—',
+            PAYMENT_METHOD_LABELS[row.paymentMethod],
+            row.partner?.name || '—',
+            `${isDeposit ? '+' : '-'} ${formatCurrency(amount)}`,
+            formatCurrency(row.balanceAfter),
+          ];
+        });
 
         autoTable(doc, {
           startY: 52,
-          head: [['N°', 'Titre', 'Provenance (URL)', 'Retrait', 'Solde']],
+          head: [
+            ['N°', 'Date', 'Titre', 'Type', 'Provenance (URL)', 'Mode', 'Partenaire', 'Montant', 'Solde'],
+          ],
           body: tableBody,
           theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 2 },
           headStyles: { fillColor: [166, 82, 61], textColor: [255, 255, 255], fontStyle: 'bold' },
           bodyStyles: { textColor: [54, 49, 46] },
           columnStyles: {
-            0: { cellWidth: 12, halign: 'center' },
-            3: { halign: 'right', textColor: [200, 50, 50] },
-            4: { halign: 'right', fontStyle: 'bold' },
+            0: { cellWidth: 10, halign: 'center' },
+            7: { halign: 'right' },
+            8: { halign: 'right', fontStyle: 'bold' },
+          },
+          didParseCell: (data) => {
+            if (data.section === 'body' && data.column.index === 7) {
+              const isDeposit = tableBody[data.row.index]?.[3] === 'Ajout';
+              data.cell.styles.textColor = isDeposit ? [77, 128, 92] : [200, 50, 50];
+            }
           },
           alternateRowStyles: { fillColor: [249, 246, 240] },
         });
@@ -803,7 +1041,7 @@ function ProjectPage() {
         </header>
 
         <main>
-          <div className="hidden md:grid grid-cols-[3rem_200px_1fr_160px_160px_4rem] gap-4 pb-4 border-b border-border text-xs font-bold text-muted-foreground uppercase tracking-widest pl-2">
+          <div className="hidden md:grid grid-cols-[3rem_180px_1fr_150px_150px_4rem] gap-4 pb-4 border-b border-border text-xs font-bold text-muted-foreground uppercase tracking-widest pl-2">
             <div className="text-center">N°</div>
             <div>Titre</div>
             <div>Provenance (URL)</div>
@@ -816,6 +1054,7 @@ function ProjectPage() {
             <AnimatePresence initial={false}>
               {rows.map((row, idx) => {
                 const balance = rowsWithBalance[idx].balanceAfter;
+                const isDeposit = row.type === 'deposit';
                 return (
                   <motion.div
                     key={row.id}
@@ -825,83 +1064,157 @@ function ProjectPage() {
                     transition={{ duration: 0.3, ease: 'easeInOut' }}
                     className="group overflow-hidden"
                   >
-                    <div className="flex flex-col md:grid md:grid-cols-[3rem_200px_1fr_160px_160px_4rem] items-center gap-4 py-4 md:py-3 border border-border md:border-none md:border-b rounded-2xl md:rounded-none bg-card md:bg-transparent p-5 md:p-2 hover:bg-card/40 transition-colors">
-                      <div className="hidden md:block text-center font-mono text-sm text-muted-foreground font-medium">
-                        {(idx + 1).toString().padStart(2, '0')}
-                      </div>
+                    <div className="border border-border md:border-none md:border-b rounded-2xl md:rounded-none bg-card md:bg-transparent hover:bg-card/40 transition-colors">
+                      <div className="flex flex-col md:grid md:grid-cols-[3rem_180px_1fr_150px_150px_4rem] items-center gap-4 py-4 md:py-3 p-5 md:p-2">
+                        <div className="hidden md:block text-center font-mono text-sm text-muted-foreground font-medium">
+                          {(idx + 1).toString().padStart(2, '0')}
+                        </div>
 
-                      <div className="md:hidden w-full flex justify-between items-center mb-2 pb-3 border-b border-border/60">
-                        <span className="font-mono text-sm text-muted-foreground font-bold tracking-widest uppercase">
-                          Ligne {(idx + 1).toString().padStart(2, '0')}
-                        </span>
-                        <button
-                          onClick={() => removeRow(row.id)}
-                          className="text-muted-foreground hover:text-destructive p-2 rounded-full hover:bg-destructive/10 transition-colors"
-                          title="Supprimer la ligne"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                        <div className="md:hidden w-full flex justify-between items-center mb-2 pb-3 border-b border-border/60">
+                          <span className="font-mono text-sm text-muted-foreground font-bold tracking-widest uppercase">
+                            Ligne {(idx + 1).toString().padStart(2, '0')}
+                          </span>
+                          <button
+                            onClick={() => removeRow(row.id)}
+                            className="text-muted-foreground hover:text-destructive p-2 rounded-full hover:bg-destructive/10 transition-colors"
+                            title="Supprimer la ligne"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
 
-                      <div className="w-full relative flex items-center">
-                        <Tag className="w-4 h-4 text-muted-foreground absolute left-3 md:left-0" />
-                        <input
-                          type="text"
-                          value={row.title}
-                          onChange={(e) => updateRow(row.id, 'title', e.target.value)}
-                          placeholder="Ex : Loyer"
-                          className="w-full pl-9 md:pl-7 py-2 bg-transparent border-b border-transparent focus:border-primary/50 outline-none transition-colors font-sans font-medium text-foreground placeholder:text-muted-foreground/40 text-base md:text-sm"
-                        />
-                      </div>
-
-                      <div className="w-full relative flex items-center">
-                        <LinkIcon className="w-4 h-4 text-muted-foreground absolute left-3 md:left-0" />
-                        <input
-                          type="text"
-                          value={row.url}
-                          onChange={(e) => updateRow(row.id, 'url', e.target.value)}
-                          placeholder="https://..."
-                          className="w-full pl-9 md:pl-7 py-2 bg-transparent border-b border-transparent focus:border-primary/50 outline-none transition-colors font-sans text-foreground placeholder:text-muted-foreground/40 text-base md:text-sm"
-                        />
-                      </div>
-
-                      <div className="w-full relative flex items-center md:justify-end mt-2 md:mt-0">
-                        <span className="md:hidden text-sm font-medium text-muted-foreground w-28 uppercase tracking-wider text-xs">
-                          Retrait
-                        </span>
-                        <div className="flex-1 md:flex-none flex items-center md:justify-end border-b border-transparent focus-within:border-destructive/50 transition-colors pb-1">
-                          <Minus className="w-3 h-3 text-destructive mr-1.5" />
-                          <AmountInput
-                            value={row.amount}
-                            onValueChange={(value) => updateRow(row.id, 'amount', value)}
-                            placeholder="0"
-                            className="w-full md:w-24 text-right bg-transparent outline-none font-mono text-xl md:text-base text-destructive placeholder:text-muted-foreground/30 font-semibold"
+                        <div className="w-full relative flex items-center">
+                          <Tag className="w-4 h-4 text-muted-foreground absolute left-3 md:left-0" />
+                          <input
+                            type="text"
+                            value={row.title}
+                            onChange={(e) => updateRow(row.id, 'title', e.target.value)}
+                            placeholder="Ex : Loyer"
+                            className="w-full pl-9 md:pl-7 py-2 bg-transparent border-b border-transparent focus:border-primary/50 outline-none transition-colors font-sans font-medium text-foreground placeholder:text-muted-foreground/40 text-base md:text-sm"
                           />
-                          <span className="font-mono text-destructive ml-1">€</span>
+                        </div>
+
+                        <div className="w-full relative flex items-center">
+                          <LinkIcon className="w-4 h-4 text-muted-foreground absolute left-3 md:left-0" />
+                          <input
+                            type="text"
+                            value={row.url}
+                            onChange={(e) => updateRow(row.id, 'url', e.target.value)}
+                            placeholder="https://..."
+                            className="w-full pl-9 md:pl-7 py-2 bg-transparent border-b border-transparent focus:border-primary/50 outline-none transition-colors font-sans text-foreground placeholder:text-muted-foreground/40 text-base md:text-sm"
+                          />
+                        </div>
+
+                        <div className="w-full flex items-center md:justify-end gap-2 mt-2 md:mt-0">
+                          <div className="flex items-center rounded-full border border-border overflow-hidden shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => updateRowType(row.id, 'withdrawal')}
+                              title="Retrait"
+                              className={`p-1.5 transition-colors ${
+                                !isDeposit
+                                  ? 'bg-destructive/10 text-destructive'
+                                  : 'text-muted-foreground/40 hover:text-destructive'
+                              }`}
+                            >
+                              <ArrowDownCircle className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateRowType(row.id, 'deposit')}
+                              title="Ajout d'argent"
+                              className={`p-1.5 transition-colors border-l border-border ${
+                                isDeposit
+                                  ? 'bg-accent/10 text-accent'
+                                  : 'text-muted-foreground/40 hover:text-accent'
+                              }`}
+                            >
+                              <ArrowUpCircle className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div
+                            className={`flex-1 md:flex-none flex items-center md:justify-end border-b transition-colors pb-1 ${
+                              isDeposit
+                                ? 'border-transparent focus-within:border-accent/50'
+                                : 'border-transparent focus-within:border-destructive/50'
+                            }`}
+                          >
+                            <AmountInput
+                              value={row.amount}
+                              onValueChange={(value) => updateRow(row.id, 'amount', value)}
+                              placeholder="0"
+                              className={`w-full md:w-20 text-right bg-transparent outline-none font-mono text-xl md:text-base placeholder:text-muted-foreground/30 font-semibold ${
+                                isDeposit ? 'text-accent' : 'text-destructive'
+                              }`}
+                            />
+                            <span
+                              className={`font-mono ml-1 ${isDeposit ? 'text-accent' : 'text-destructive'}`}
+                            >
+                              €
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="w-full flex items-center md:justify-end mt-4 md:mt-0 pt-4 md:pt-0 border-t border-border/60 md:border-none">
+                          <span className="md:hidden text-sm font-medium text-muted-foreground w-28 uppercase tracking-wider text-xs">
+                            Solde après
+                          </span>
+                          <div
+                            className={`flex-1 md:flex-none text-right font-mono text-xl md:text-base font-bold ${
+                              balance < 0 ? 'text-destructive' : 'text-foreground'
+                            }`}
+                          >
+                            {formatCurrency(balance)}
+                          </div>
+                        </div>
+
+                        <div className="hidden md:flex justify-center">
+                          <button
+                            onClick={() => removeRow(row.id)}
+                            className="text-muted-foreground/40 hover:text-destructive p-2 rounded-full hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
 
-                      <div className="w-full flex items-center md:justify-end mt-4 md:mt-0 pt-4 md:pt-0 border-t border-border/60 md:border-none">
-                        <span className="md:hidden text-sm font-medium text-muted-foreground w-28 uppercase tracking-wider text-xs">
-                          Solde après
-                        </span>
-                        <div
-                          className={`flex-1 md:flex-none text-right font-mono text-xl md:text-base font-bold ${
-                            balance < 0 ? 'text-destructive' : 'text-foreground'
-                          }`}
-                        >
-                          {formatCurrency(balance)}
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 md:pl-[calc(3rem+1rem)] md:pr-2 pb-4 md:pb-3 -mt-1 md:mt-0">
+                        <div className="flex items-center gap-2">
+                          <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <input
+                            type="date"
+                            value={row.date}
+                            onChange={(e) => updateRowDate(row.id, e.target.value)}
+                            className="bg-transparent text-sm text-foreground outline-none border-b border-transparent focus:border-primary/50 py-1 transition-colors"
+                          />
                         </div>
-                      </div>
 
-                      <div className="hidden md:flex justify-center">
-                        <button
-                          onClick={() => removeRow(row.id)}
-                          className="text-muted-foreground/40 hover:text-destructive p-2 rounded-full hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                          title="Supprimer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <Wallet className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <Select
+                            value={row.paymentMethod}
+                            onValueChange={(value) =>
+                              updateRowPaymentMethod(row.id, value as PaymentMethod)
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[170px] border-none shadow-none bg-transparent px-0 text-sm focus:ring-0">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PAYMENT_METHOD_OPTIONS.map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <PartnerPicker
+                          value={row.partner}
+                          onChange={(partner) => updateRowPartner(row.id, partner)}
+                        />
                       </div>
                     </div>
                   </motion.div>
@@ -923,7 +1236,7 @@ function ProjectPage() {
                   <Plus className="w-4 h-4" />
                 )}
               </div>
-              <span className="text-sm font-semibold tracking-wide">Ajouter un retrait</span>
+              <span className="text-sm font-semibold tracking-wide">Ajouter une transaction</span>
             </button>
           </div>
         </main>

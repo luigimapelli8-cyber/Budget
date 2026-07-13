@@ -69,8 +69,17 @@ export const GetProjectResponse = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "title": zod.string(),
+  "type": zod.enum(['withdrawal', 'deposit']).describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number(),
   "url": zod.string(),
+  "date": zod.coerce.date(),
+  "paymentMethod": zod.enum(['carte_debit', 'cheque', 'virement', 'cash', 'cheque_vacances', 'carte_resto', 'autre']).describe('French payment methods: debit card, cheque, bank transfer, cash, holiday voucher (Chèque-Vacances), meal\/restaurant card (Carte Resto \/ Pass), other\n'),
+  "partner": zod.union([zod.object({
+  "id": zod.string().describe('Clerk user id'),
+  "name": zod.string(),
+  "email": zod.string().optional(),
+  "imageUrl": zod.string().describe('Profile photo URL (e.g. from Google sign-in)')
+}),zod.null()]),
   "createdAt": zod.coerce.date()
 }))
 })
@@ -122,8 +131,17 @@ export const ListWithdrawalsResponseItem = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "title": zod.string(),
+  "type": zod.enum(['withdrawal', 'deposit']).describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number(),
   "url": zod.string(),
+  "date": zod.coerce.date(),
+  "paymentMethod": zod.enum(['carte_debit', 'cheque', 'virement', 'cash', 'cheque_vacances', 'carte_resto', 'autre']).describe('French payment methods: debit card, cheque, bank transfer, cash, holiday voucher (Chèque-Vacances), meal\/restaurant card (Carte Resto \/ Pass), other\n'),
+  "partner": zod.union([zod.object({
+  "id": zod.string().describe('Clerk user id'),
+  "name": zod.string(),
+  "email": zod.string().optional(),
+  "imageUrl": zod.string().describe('Profile photo URL (e.g. from Google sign-in)')
+}),zod.null()]),
   "createdAt": zod.coerce.date()
 })
 export const ListWithdrawalsResponse = zod.array(ListWithdrawalsResponseItem)
@@ -138,18 +156,50 @@ export const CreateWithdrawalParams = zod.object({
 
 export const CreateWithdrawalBody = zod.object({
   "title": zod.string(),
+  "type": zod.enum(['withdrawal', 'deposit']).optional().describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number(),
-  "url": zod.string()
+  "url": zod.string(),
+  "date": zod.coerce.date().optional(),
+  "paymentMethod": zod.enum(['carte_debit', 'cheque', 'virement', 'cash', 'cheque_vacances', 'carte_resto', 'autre']).optional().describe('French payment methods: debit card, cheque, bank transfer, cash, holiday voucher (Chèque-Vacances), meal\/restaurant card (Carte Resto \/ Pass), other\n'),
+  "partnerUserId": zod.string().nullish()
 })
 
 export const CreateWithdrawalResponse = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "title": zod.string(),
+  "type": zod.enum(['withdrawal', 'deposit']).describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number(),
   "url": zod.string(),
+  "date": zod.coerce.date(),
+  "paymentMethod": zod.enum(['carte_debit', 'cheque', 'virement', 'cash', 'cheque_vacances', 'carte_resto', 'autre']).describe('French payment methods: debit card, cheque, bank transfer, cash, holiday voucher (Chèque-Vacances), meal\/restaurant card (Carte Resto \/ Pass), other\n'),
+  "partner": zod.union([zod.object({
+  "id": zod.string().describe('Clerk user id'),
+  "name": zod.string(),
+  "email": zod.string().optional(),
+  "imageUrl": zod.string().describe('Profile photo URL (e.g. from Google sign-in)')
+}),zod.null()]),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Search other users who already have an account, to link as a partner
+ */
+
+
+
+export const SearchPartnersQueryParams = zod.object({
+  "q": zod.coerce.string().min(1)
+})
+
+export const SearchPartnersResponseItem = zod.object({
+  "id": zod.string().describe('Clerk user id'),
+  "name": zod.string(),
+  "email": zod.string().optional(),
+  "imageUrl": zod.string().describe('Profile photo URL (e.g. from Google sign-in)')
+})
+export const SearchPartnersResponse = zod.array(SearchPartnersResponseItem)
 
 
 /**
@@ -161,16 +211,29 @@ export const UpdateWithdrawalParams = zod.object({
 
 export const UpdateWithdrawalBody = zod.object({
   "title": zod.string().optional(),
+  "type": zod.enum(['withdrawal', 'deposit']).optional().describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number().optional(),
-  "url": zod.string().optional()
+  "url": zod.string().optional(),
+  "date": zod.coerce.date().optional(),
+  "paymentMethod": zod.enum(['carte_debit', 'cheque', 'virement', 'cash', 'cheque_vacances', 'carte_resto', 'autre']).optional().describe('French payment methods: debit card, cheque, bank transfer, cash, holiday voucher (Chèque-Vacances), meal\/restaurant card (Carte Resto \/ Pass), other\n'),
+  "partnerUserId": zod.string().nullish()
 })
 
 export const UpdateWithdrawalResponse = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "title": zod.string(),
+  "type": zod.enum(['withdrawal', 'deposit']).describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number(),
   "url": zod.string(),
+  "date": zod.coerce.date(),
+  "paymentMethod": zod.enum(['carte_debit', 'cheque', 'virement', 'cash', 'cheque_vacances', 'carte_resto', 'autre']).describe('French payment methods: debit card, cheque, bank transfer, cash, holiday voucher (Chèque-Vacances), meal\/restaurant card (Carte Resto \/ Pass), other\n'),
+  "partner": zod.union([zod.object({
+  "id": zod.string().describe('Clerk user id'),
+  "name": zod.string(),
+  "email": zod.string().optional(),
+  "imageUrl": zod.string().describe('Profile photo URL (e.g. from Google sign-in)')
+}),zod.null()]),
   "createdAt": zod.coerce.date()
 })
 

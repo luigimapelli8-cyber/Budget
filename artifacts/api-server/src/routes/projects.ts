@@ -13,6 +13,7 @@ import {
   DeleteProjectParams,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth";
+import { getPartnersByIds } from "../lib/partners";
 
 const router: IRouter = Router();
 
@@ -27,7 +28,7 @@ router.get("/projects", async (req, res): Promise<void> => {
       startingAmount: projectsTable.startingAmount,
       createdAt: projectsTable.createdAt,
       withdrawalCount: sql<number>`count(${withdrawalsTable.id})::int`,
-      withdrawalTotal: sql<string>`coalesce(sum(${withdrawalsTable.amount}), 0)`,
+      netTotal: sql<string>`coalesce(sum(case when ${withdrawalsTable.type} = 'deposit' then ${withdrawalsTable.amount} else -${withdrawalsTable.amount} end), 0)`,
     })
     .from(projectsTable)
     .leftJoin(withdrawalsTable, eq(withdrawalsTable.projectId, projectsTable.id))
@@ -39,7 +40,7 @@ router.get("/projects", async (req, res): Promise<void> => {
     id: row.id,
     name: row.name,
     startingAmount: Number(row.startingAmount),
-    finalBalance: Number(row.startingAmount) - Number(row.withdrawalTotal),
+    finalBalance: Number(row.startingAmount) + Number(row.netTotal),
     withdrawalCount: row.withdrawalCount,
     createdAt: row.createdAt,
   }));
@@ -103,7 +104,9 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
     .select()
     .from(withdrawalsTable)
     .where(eq(withdrawalsTable.projectId, project.id))
-    .orderBy(withdrawalsTable.createdAt);
+    .orderBy(withdrawalsTable.date);
+
+  const partnersById = await getPartnersByIds(withdrawals.map((w) => w.partnerUserId));
 
   res.json(
     GetProjectResponse.parse({
@@ -115,8 +118,12 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
         id: w.id,
         projectId: w.projectId,
         title: w.title,
+        type: w.type,
         amount: Number(w.amount),
         url: w.url,
+        date: w.date,
+        paymentMethod: w.paymentMethod,
+        partner: w.partnerUserId ? partnersById.get(w.partnerUserId) ?? null : null,
         createdAt: w.createdAt,
       })),
     }),
@@ -156,7 +163,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
 
   const [{ total }] = await db
     .select({
-      total: sql<string>`coalesce(sum(${withdrawalsTable.amount}), 0)`,
+      total: sql<string>`coalesce(sum(case when ${withdrawalsTable.type} = 'deposit' then ${withdrawalsTable.amount} else -${withdrawalsTable.amount} end), 0)`,
     })
     .from(withdrawalsTable)
     .where(eq(withdrawalsTable.projectId, project.id));
@@ -171,7 +178,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
       id: project.id,
       name: project.name,
       startingAmount: Number(project.startingAmount),
-      finalBalance: Number(project.startingAmount) - Number(total),
+      finalBalance: Number(project.startingAmount) + Number(total),
       withdrawalCount: count,
       createdAt: project.createdAt,
     }),

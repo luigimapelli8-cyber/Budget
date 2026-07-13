@@ -20,10 +20,17 @@ export const withdrawalsTable = pgTable("withdrawals", {
     .notNull()
     .references(() => projectsTable.id, { onDelete: "cascade" }),
   title: text("title").notNull().default(""),
+  // "withdrawal" subtracts amount from the running balance, "deposit" adds it.
+  type: text("type").notNull().default("withdrawal"),
   amount: numeric("amount", { precision: 14, scale: 2 })
     .notNull()
     .$type<string>(),
   url: text("url").notNull(),
+  // User-specified transaction date, distinct from createdAt (row creation time).
+  date: timestamp("date", { withTimezone: true }).notNull().defaultNow(),
+  paymentMethod: text("payment_method").notNull().default("cash"),
+  // Clerk user id of a linked partner (another account holder on the site), if any.
+  partnerUserId: text("partner_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
