@@ -157,6 +157,56 @@ const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(val);
 };
 
+// Groups the integer part of a raw number string by thousands with a plain space,
+// e.g. "1000000" -> "1 000 000". Keeps a single decimal separator (comma or dot) intact.
+const groupThousands = (integerPart: string) => integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+const formatAmountInput = (raw: string) => {
+  if (!raw) return '';
+  const negative = raw.trim().startsWith('-');
+  const cleaned = raw.replace(/[^\d.,]/g, '');
+  const sepIndex = cleaned.search(/[.,]/);
+  let integerPart = cleaned;
+  let decimalPart = '';
+  if (sepIndex !== -1) {
+    integerPart = cleaned.slice(0, sepIndex);
+    decimalPart = cleaned[sepIndex] + cleaned.slice(sepIndex + 1).replace(/[^\d]/g, '');
+  }
+  integerPart = integerPart.replace(/^0+(?=\d)/, '');
+  return `${negative ? '-' : ''}${groupThousands(integerPart)}${decimalPart}`;
+};
+
+// Controlled text input that displays a live "1 000 000"-style grouped value while
+// storing/emitting a plain numeric string (dot as decimal separator) via onValueChange.
+function AmountInput({
+  value,
+  onValueChange,
+  className,
+  placeholder,
+  autoFocus,
+}: {
+  value: string;
+  onValueChange: (raw: string) => void;
+  className?: string;
+  placeholder?: string;
+  autoFocus?: boolean;
+}) {
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      autoFocus={autoFocus}
+      value={formatAmountInput(value)}
+      onChange={(e) => {
+        const raw = e.target.value.replace(/\s/g, '').replace(',', '.');
+        onValueChange(raw.replace(/[^0-9.-]/g, ''));
+      }}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
+
 const formatDate = (iso: string) => {
   return new Date(iso).toLocaleDateString('fr-FR', {
     day: '2-digit',
@@ -348,10 +398,9 @@ function ProjectsListPage() {
                     Somme de départ
                   </label>
                   <div className="flex items-baseline gap-2">
-                    <input
-                      type="number"
+                    <AmountInput
                       value={newAmount}
-                      onChange={(e) => setNewAmount(e.target.value)}
+                      onValueChange={setNewAmount}
                       placeholder="0"
                       className="w-full mt-1 bg-transparent border-b-2 border-border focus:border-primary outline-none py-2 text-lg font-mono font-bold text-accent transition-colors"
                     />
@@ -645,6 +694,16 @@ function ProjectPage() {
         doc.setTextColor(54, 49, 46);
         doc.text(`Solde final : ${formatCurrency(finalBalance)}`, 14, finalY + 20);
 
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(9);
+        doc.setTextColor(150, 150, 150);
+        doc.text(
+          'Site créé par Luigi MAPELLI',
+          doc.internal.pageSize.width / 2,
+          doc.internal.pageSize.height - 10,
+          { align: 'center' },
+        );
+
         doc.save(`${(projectName || 'registre').toLowerCase().replace(/\s+/g, '-')}.pdf`);
 
         setGenerateSuccess(true);
@@ -725,12 +784,11 @@ function ProjectPage() {
               Somme de départ
             </label>
             <div className="flex items-baseline gap-2 relative">
-              <input
-                type="number"
+              <AmountInput
                 value={startingAmount}
-                onChange={(e) => {
-                  setStartingAmount(e.target.value);
-                  saveStartingAmount(e.target.value);
+                onValueChange={(value) => {
+                  setStartingAmount(value);
+                  saveStartingAmount(value);
                 }}
                 className="font-mono text-4xl md:text-5xl font-bold bg-transparent border-none text-accent outline-none focus:ring-0 p-0 w-[220px] md:text-right placeholder:text-muted transition-colors focus:text-primary z-10"
                 placeholder="0"
@@ -809,10 +867,9 @@ function ProjectPage() {
                         </span>
                         <div className="flex-1 md:flex-none flex items-center md:justify-end border-b border-transparent focus-within:border-destructive/50 transition-colors pb-1">
                           <Minus className="w-3 h-3 text-destructive mr-1.5" />
-                          <input
-                            type="number"
+                          <AmountInput
                             value={row.amount}
-                            onChange={(e) => updateRow(row.id, 'amount', e.target.value)}
+                            onValueChange={(value) => updateRow(row.id, 'amount', value)}
                             placeholder="0"
                             className="w-full md:w-24 text-right bg-transparent outline-none font-mono text-xl md:text-base text-destructive placeholder:text-muted-foreground/30 font-semibold"
                           />
