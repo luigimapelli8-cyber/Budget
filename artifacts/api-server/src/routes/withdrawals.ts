@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, projectsTable, withdrawalsTable } from "@workspace/db";
 import {
   ListWithdrawalsParams,
@@ -12,10 +12,14 @@ import {
   UpdateWithdrawalResponse,
   DeleteWithdrawalParams,
 } from "@workspace/api-zod";
+import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
+router.use(requireAuth);
+
 router.get("/projects/:id/withdrawals", async (req, res): Promise<void> => {
+  const { userId } = req as unknown as AuthedRequest;
   const params = ListWithdrawalsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -25,7 +29,7 @@ router.get("/projects/:id/withdrawals", async (req, res): Promise<void> => {
   const [project] = await db
     .select({ id: projectsTable.id })
     .from(projectsTable)
-    .where(eq(projectsTable.id, params.data.id));
+    .where(and(eq(projectsTable.id, params.data.id), eq(projectsTable.userId, userId)));
 
   if (!project) {
     res.status(404).json({ error: "Project not found" });
@@ -43,6 +47,7 @@ router.get("/projects/:id/withdrawals", async (req, res): Promise<void> => {
       withdrawals.map((w) => ({
         id: w.id,
         projectId: w.projectId,
+        title: w.title,
         amount: Number(w.amount),
         url: w.url,
         createdAt: w.createdAt,
@@ -52,6 +57,7 @@ router.get("/projects/:id/withdrawals", async (req, res): Promise<void> => {
 });
 
 router.post("/projects/:id/withdrawals", async (req, res): Promise<void> => {
+  const { userId } = req as unknown as AuthedRequest;
   const params = CreateWithdrawalParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -67,7 +73,7 @@ router.post("/projects/:id/withdrawals", async (req, res): Promise<void> => {
   const [project] = await db
     .select({ id: projectsTable.id })
     .from(projectsTable)
-    .where(eq(projectsTable.id, params.data.id));
+    .where(and(eq(projectsTable.id, params.data.id), eq(projectsTable.userId, userId)));
 
   if (!project) {
     res.status(404).json({ error: "Project not found" });
@@ -78,6 +84,7 @@ router.post("/projects/:id/withdrawals", async (req, res): Promise<void> => {
     .insert(withdrawalsTable)
     .values({
       projectId: params.data.id,
+      title: parsed.data.title,
       amount: parsed.data.amount.toString(),
       url: parsed.data.url,
     })
@@ -92,6 +99,7 @@ router.post("/projects/:id/withdrawals", async (req, res): Promise<void> => {
     CreateWithdrawalResponse.parse({
       id: withdrawal.id,
       projectId: withdrawal.projectId,
+      title: withdrawal.title,
       amount: Number(withdrawal.amount),
       url: withdrawal.url,
       createdAt: withdrawal.createdAt,
@@ -100,6 +108,7 @@ router.post("/projects/:id/withdrawals", async (req, res): Promise<void> => {
 });
 
 router.patch("/withdrawals/:id", async (req, res): Promise<void> => {
+  const { userId } = req as unknown as AuthedRequest;
   const params = UpdateWithdrawalParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -112,7 +121,28 @@ router.patch("/withdrawals/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const updates: { amount?: string; url?: string } = {};
+  const [existing] = await db
+    .select({ projectId: withdrawalsTable.projectId })
+    .from(withdrawalsTable)
+    .where(eq(withdrawalsTable.id, params.data.id));
+
+  if (!existing) {
+    res.status(404).json({ error: "Withdrawal not found" });
+    return;
+  }
+
+  const [owned] = await db
+    .select({ id: projectsTable.id })
+    .from(projectsTable)
+    .where(and(eq(projectsTable.id, existing.projectId), eq(projectsTable.userId, userId)));
+
+  if (!owned) {
+    res.status(404).json({ error: "Withdrawal not found" });
+    return;
+  }
+
+  const updates: { title?: string; amount?: string; url?: string } = {};
+  if (parsed.data.title !== undefined) updates.title = parsed.data.title;
   if (parsed.data.amount !== undefined) updates.amount = parsed.data.amount.toString();
   if (parsed.data.url !== undefined) updates.url = parsed.data.url;
 
@@ -131,6 +161,7 @@ router.patch("/withdrawals/:id", async (req, res): Promise<void> => {
     UpdateWithdrawalResponse.parse({
       id: withdrawal.id,
       projectId: withdrawal.projectId,
+      title: withdrawal.title,
       amount: Number(withdrawal.amount),
       url: withdrawal.url,
       createdAt: withdrawal.createdAt,
@@ -139,6 +170,7 @@ router.patch("/withdrawals/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/withdrawals/:id", async (req, res): Promise<void> => {
+  const { userId } = req as unknown as AuthedRequest;
   const params = DeleteWithdrawalParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -146,11 +178,31 @@ router.delete("/withdrawals/:id", async (req, res): Promise<void> => {
   }
 
   const [withdrawal] = await db
+    .select({ projectId: withdrawalsTable.projectId })
+    .from(withdrawalsTable)
+    .where(eq(withdrawalsTable.id, params.data.id));
+
+  if (!withdrawal) {
+    res.status(404).json({ error: "Withdrawal not found" });
+    return;
+  }
+
+  const [owned] = await db
+    .select({ id: projectsTable.id })
+    .from(projectsTable)
+    .where(and(eq(projectsTable.id, withdrawal.projectId), eq(projectsTable.userId, userId)));
+
+  if (!owned) {
+    res.status(404).json({ error: "Withdrawal not found" });
+    return;
+  }
+
+  const [deleted] = await db
     .delete(withdrawalsTable)
     .where(eq(withdrawalsTable.id, params.data.id))
     .returning();
 
-  if (!withdrawal) {
+  if (!deleted) {
     res.status(404).json({ error: "Withdrawal not found" });
     return;
   }

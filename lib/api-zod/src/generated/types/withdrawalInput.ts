@@ -7,6 +7,7 @@
  */
 
 export interface WithdrawalInput {
+  title: string;
   amount: number;
   url: string;
 }

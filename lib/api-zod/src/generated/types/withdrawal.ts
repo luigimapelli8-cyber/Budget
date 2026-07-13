@@ -9,6 +9,7 @@
 export interface Withdrawal {
   id: number;
   projectId: number;
+  title: string;
   amount: number;
   url: string;
   createdAt: Date;

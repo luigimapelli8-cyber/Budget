@@ -68,6 +68,7 @@ export const GetProjectResponse = zod.object({
   "withdrawals": zod.array(zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
+  "title": zod.string(),
   "amount": zod.number(),
   "url": zod.string(),
   "createdAt": zod.coerce.date()
@@ -120,6 +121,7 @@ export const ListWithdrawalsParams = zod.object({
 export const ListWithdrawalsResponseItem = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
+  "title": zod.string(),
   "amount": zod.number(),
   "url": zod.string(),
   "createdAt": zod.coerce.date()
@@ -135,6 +137,7 @@ export const CreateWithdrawalParams = zod.object({
 })
 
 export const CreateWithdrawalBody = zod.object({
+  "title": zod.string(),
   "amount": zod.number(),
   "url": zod.string()
 })
@@ -142,6 +145,7 @@ export const CreateWithdrawalBody = zod.object({
 export const CreateWithdrawalResponse = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
+  "title": zod.string(),
   "amount": zod.number(),
   "url": zod.string(),
   "createdAt": zod.coerce.date()
@@ -156,6 +160,7 @@ export const UpdateWithdrawalParams = zod.object({
 })
 
 export const UpdateWithdrawalBody = zod.object({
+  "title": zod.string().optional(),
   "amount": zod.number().optional(),
   "url": zod.string().optional()
 })
@@ -163,6 +168,7 @@ export const UpdateWithdrawalBody = zod.object({
 export const UpdateWithdrawalResponse = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
+  "title": zod.string(),
   "amount": zod.number(),
   "url": zod.string(),
   "createdAt": zod.coerce.date()

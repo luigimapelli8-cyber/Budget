@@ -271,12 +271,14 @@ components:
             $ref: "#/components/schemas/Withdrawal"
     Withdrawal:
       type: object
-      required: [id, projectId, amount, url, createdAt]
+      required: [id, projectId, title, amount, url, createdAt]
       properties:
         id:
           type: integer
         projectId:
           type: integer
+        title:
+          type: string
         amount:
           type: number
         url:
@@ -286,8 +288,10 @@ components:
           format: date-time
     WithdrawalInput:
       type: object
-      required: [amount, url]
+      required: [title, amount, url]
       properties:
+        title:
+          type: string
         amount:
           type: number
         url:
@@ -295,6 +299,8 @@ components:
     WithdrawalUpdate:
       type: object
       properties:
+        title:
+          type: string
         amount:
           type: number
         url:

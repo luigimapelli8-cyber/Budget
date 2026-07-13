@@ -1,7 +1,17 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Route, Switch, Router as WouterRouter, useLocation, useParams, Link } from 'wouter';
+import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { Route, Switch, Router as WouterRouter, useLocation, useParams, Redirect } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  ClerkProvider,
+  SignIn,
+  SignUp,
+  Show,
+  useClerk,
+  useUser,
+} from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { shadcn } from '@clerk/themes';
 import {
   Plus,
   Trash2,
@@ -14,6 +24,8 @@ import {
   ArrowLeft,
   BookOpen,
   Pencil,
+  LogOut,
+  Tag,
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -30,9 +42,116 @@ import {
   getGetProjectQueryKey,
   getListProjectsQueryKey,
 } from '@workspace/api-client-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
 
-const queryClient = new QueryClient();
+// ---------------------------------------------------------------------------
+// Clerk wiring — copied verbatim per clerk-auth skill conventions.
+// ---------------------------------------------------------------------------
+
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
+}
+
+if (!clerkPubKey) {
+  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  variables: {
+    colorPrimary: '#A6523D',
+    colorForeground: '#36312E',
+    colorMutedForeground: '#78716C',
+    colorDanger: '#B33A3A',
+    colorBackground: '#F9F6F0',
+    colorInput: '#FFFFFF',
+    colorInputForeground: '#36312E',
+    colorNeutral: '#D9D2C7',
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    borderRadius: '0.75rem',
+  },
+  elements: {
+    rootBox: 'w-full flex justify-center',
+    cardBox: 'bg-card rounded-2xl w-[440px] max-w-full overflow-hidden border border-card-border',
+    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    headerTitle: 'font-serif text-3xl text-foreground',
+    headerSubtitle: 'text-muted-foreground',
+    socialButtonsBlockButtonText: 'text-foreground font-semibold',
+    formFieldLabel: 'text-foreground font-medium',
+    footerActionLink: 'text-primary font-semibold hover:text-primary/80',
+    footerActionText: 'text-muted-foreground',
+    dividerText: 'text-muted-foreground',
+    identityPreviewEditButton: 'text-primary',
+    formFieldSuccessText: 'text-accent',
+    alertText: 'text-destructive',
+    logoBox: 'flex justify-center py-2',
+    logoImage: 'h-10 w-10',
+    socialButtonsBlockButton: 'border border-border hover:bg-muted/40',
+    formButtonPrimary: 'bg-primary hover:bg-primary/90 text-primary-foreground',
+    formFieldInput: 'bg-input text-foreground border border-border',
+    footerAction: 'text-center',
+    dividerLine: 'bg-border',
+    alert: 'bg-destructive/10 border border-destructive/30',
+    otpCodeFieldInput: 'border border-border',
+    formFieldRow: '',
+    main: '',
+  },
+};
+
+function SignInPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+    </div>
+  );
+}
+
+function SignUpPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+    </div>
+  );
+}
+
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const queryClient = useQueryClient();
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+        queryClient.clear();
+      }
+      prevUserIdRef.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener, queryClient]);
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(val);
@@ -58,14 +177,91 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(callback: T,
 }
 
 // ---------------------------------------------------------------------------
-// Home: list of saved projects
+// Landing page (signed-out home)
 // ---------------------------------------------------------------------------
 
-function HomePage() {
+function LandingPage() {
+  const [, navigate] = useLocation();
+
+  return (
+    <div className="min-h-[100dvh] bg-background text-foreground font-sans flex items-center justify-center p-4 md:p-8">
+      <div className="max-w-xl w-full text-center space-y-8">
+        <div className="flex items-center justify-center gap-3 text-primary">
+          <Receipt className="w-8 h-8" />
+          <span className="font-mono text-sm tracking-widest uppercase font-bold">
+            Carnet de suivi
+          </span>
+        </div>
+        <h1 className="font-serif text-5xl md:text-6xl font-medium tracking-tight text-foreground">
+          Suivi de retraits
+        </h1>
+        <p className="text-muted-foreground text-lg">
+          Enregistre tes projets, suis chaque retrait avec son titre et sa provenance, et exporte
+          ton registre en PDF à tout moment.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+          <button
+            onClick={() => navigate('/sign-up')}
+            className="h-14 px-8 rounded-full bg-primary text-primary-foreground font-semibold shadow-lg hover:bg-primary/90 hover:-translate-y-0.5 transition-all"
+          >
+            Créer un compte
+          </button>
+          <button
+            onClick={() => navigate('/sign-in')}
+            className="h-14 px-8 rounded-full border border-border text-foreground font-semibold hover:border-primary/50 transition-colors"
+          >
+            Se connecter
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HomeRedirect() {
+  return (
+    <>
+      <Show when="signed-in">
+        <Redirect to="/projects" />
+      </Show>
+      <Show when="signed-out">
+        <LandingPage />
+      </Show>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Projects list (protected)
+// ---------------------------------------------------------------------------
+
+function AccountBadge() {
+  const { user } = useUser();
+  const { signOut } = useClerk();
+
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-sm text-muted-foreground hidden md:inline">
+        {user?.primaryEmailAddress?.emailAddress ?? user?.fullName}
+      </span>
+      <button
+        onClick={() => signOut({ redirectUrl: basePath || '/' })}
+        className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors"
+        title="Se déconnecter"
+      >
+        <LogOut className="w-4 h-4" />
+        <span className="hidden md:inline">Déconnexion</span>
+      </button>
+    </div>
+  );
+}
+
+function ProjectsListPage() {
   const [, navigate] = useLocation();
   const { data: projects, isLoading } = useListProjects();
   const queryClient = useQueryClient();
   const createProject = useCreateProject();
+  const deleteProject = useDeleteProject();
 
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
@@ -88,9 +284,21 @@ function HomePage() {
     );
   };
 
+  const handleDelete = (id: number, name: string) => {
+    if (!window.confirm(`Supprimer définitivement "${name}" ?`)) return;
+    deleteProject.mutate(
+      { id },
+      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() }) },
+    );
+  };
+
   return (
     <div className="min-h-[100dvh] bg-background text-foreground font-sans selection:bg-primary/20 p-4 md:p-8 lg:p-12 overflow-x-hidden">
       <div className="max-w-3xl mx-auto space-y-10">
+        <div className="flex justify-end">
+          <AccountBadge />
+        </div>
+
         <header className="flex items-center justify-between gap-6 pb-8 border-b border-border">
           <div>
             <div className="flex items-center gap-3 mb-2 text-primary">
@@ -203,12 +411,14 @@ function HomePage() {
           )}
 
           {projects?.map((project) => (
-            <Link
+            <div
               key={project.id}
-              href={`/projects/${project.id}`}
-              className="group flex items-center justify-between gap-4 bg-card border border-card-border rounded-2xl p-5 hover:shadow-md hover:border-primary/40 transition-all cursor-pointer"
+              className="group flex items-center justify-between gap-4 bg-card border border-card-border rounded-2xl p-5 hover:shadow-md hover:border-primary/40 transition-all"
             >
-              <div className="min-w-0">
+              <button
+                onClick={() => navigate(`/projects/${project.id}`)}
+                className="min-w-0 text-left flex-1"
+              >
                 <h2 className="font-serif text-2xl font-medium truncate group-hover:text-primary transition-colors">
                   {project.name}
                 </h2>
@@ -216,8 +426,11 @@ function HomePage() {
                   {formatDate(project.createdAt as unknown as string)} · {project.withdrawalCount}{' '}
                   retrait{project.withdrawalCount > 1 ? 's' : ''}
                 </p>
-              </div>
-              <div className="text-right shrink-0">
+              </button>
+              <button
+                onClick={() => navigate(`/projects/${project.id}`)}
+                className="text-right shrink-0"
+              >
                 <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Solde
                 </div>
@@ -228,8 +441,15 @@ function HomePage() {
                 >
                   {formatCurrency(project.finalBalance)}
                 </div>
-              </div>
-            </Link>
+              </button>
+              <button
+                onClick={() => handleDelete(project.id, project.name)}
+                className="shrink-0 text-muted-foreground/40 hover:text-destructive p-2 rounded-full hover:bg-destructive/10 transition-colors"
+                title="Supprimer ce projet"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
           ))}
         </main>
       </div>
@@ -243,6 +463,7 @@ function HomePage() {
 
 type RowState = {
   id: number;
+  title: string;
   url: string;
   amount: string;
 };
@@ -274,7 +495,14 @@ function ProjectPage() {
     if (!project) return;
     setProjectName(project.name);
     setStartingAmount(String(project.startingAmount));
-    setRows(project.withdrawals.map((w) => ({ id: w.id, url: w.url, amount: String(w.amount) })));
+    setRows(
+      project.withdrawals.map((w) => ({
+        id: w.id,
+        title: w.title,
+        url: w.url,
+        amount: String(w.amount),
+      })),
+    );
   }, [project]);
 
   const invalidate = () => {
@@ -293,8 +521,13 @@ function ProjectPage() {
   }, 600);
 
   const saveWithdrawal = useDebouncedCallback(
-    (id: number, field: 'amount' | 'url', value: string) => {
-      const data = field === 'amount' ? { amount: parseFloat(value) || 0 } : { url: value };
+    (id: number, field: 'title' | 'amount' | 'url', value: string) => {
+      const data =
+        field === 'amount'
+          ? { amount: parseFloat(value) || 0 }
+          : field === 'title'
+            ? { title: value }
+            : { url: value };
       updateWithdrawal.mutate({ id, data }, { onSuccess: invalidate });
     },
     600,
@@ -316,10 +549,10 @@ function ProjectPage() {
 
   const addRow = () => {
     createWithdrawal.mutate(
-      { id: projectId, data: { amount: 0, url: '' } },
+      { id: projectId, data: { title: '', amount: 0, url: '' } },
       {
         onSuccess: (withdrawal) => {
-          setRows((prev) => [...prev, { id: withdrawal.id, url: '', amount: '0' }]);
+          setRows((prev) => [...prev, { id: withdrawal.id, title: '', url: '', amount: '0' }]);
           invalidate();
         },
       },
@@ -331,7 +564,7 @@ function ProjectPage() {
     deleteWithdrawal.mutate({ id }, { onSuccess: invalidate });
   };
 
-  const updateRow = (id: number, field: 'url' | 'amount', value: string) => {
+  const updateRow = (id: number, field: 'title' | 'url' | 'amount', value: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
     saveWithdrawal(id, field, value);
   };
@@ -343,7 +576,7 @@ function ProjectPage() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-          navigate('/');
+          navigate('/projects');
         },
       },
     );
@@ -379,6 +612,7 @@ function ProjectPage() {
 
         const tableBody = rowsWithBalance.map((row, idx) => [
           (idx + 1).toString().padStart(2, '0'),
+          row.title || '—',
           row.url || '—',
           `- ${formatCurrency(parseFloat(row.amount) || 0)}`,
           formatCurrency(row.balanceAfter),
@@ -386,15 +620,15 @@ function ProjectPage() {
 
         autoTable(doc, {
           startY: 52,
-          head: [['N°', 'Provenance (URL)', 'Retrait', 'Solde']],
+          head: [['N°', 'Titre', 'Provenance (URL)', 'Retrait', 'Solde']],
           body: tableBody,
           theme: 'grid',
           headStyles: { fillColor: [166, 82, 61], textColor: [255, 255, 255], fontStyle: 'bold' },
           bodyStyles: { textColor: [54, 49, 46] },
           columnStyles: {
-            0: { cellWidth: 15, halign: 'center' },
-            2: { halign: 'right', textColor: [200, 50, 50] },
-            3: { halign: 'right', fontStyle: 'bold' },
+            0: { cellWidth: 12, halign: 'center' },
+            3: { halign: 'right', textColor: [200, 50, 50] },
+            4: { halign: 'right', fontStyle: 'bold' },
           },
           alternateRowStyles: { fillColor: [249, 246, 240] },
         });
@@ -433,21 +667,24 @@ function ProjectPage() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground font-sans selection:bg-primary/20 p-4 md:p-8 lg:p-12 overflow-x-hidden">
-      <div className="max-w-4xl mx-auto space-y-12">
+      <div className="max-w-5xl mx-auto space-y-12">
         <div className="flex items-center justify-between">
-          <Link
-            href="/"
+          <button
+            onClick={() => navigate('/projects')}
             className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Tous les projets
-          </Link>
-          <button
-            onClick={handleDeleteProject}
-            className="text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors"
-          >
-            Supprimer ce projet
           </button>
+          <div className="flex items-center gap-6">
+            <button
+              onClick={handleDeleteProject}
+              className="text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors"
+            >
+              Supprimer ce projet
+            </button>
+            <AccountBadge />
+          </div>
         </div>
 
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 pb-8 border-b border-border">
@@ -504,8 +741,9 @@ function ProjectPage() {
         </header>
 
         <main>
-          <div className="hidden md:grid grid-cols-[3rem_1fr_180px_180px_4rem] gap-4 pb-4 border-b border-border text-xs font-bold text-muted-foreground uppercase tracking-widest pl-2">
+          <div className="hidden md:grid grid-cols-[3rem_200px_1fr_160px_160px_4rem] gap-4 pb-4 border-b border-border text-xs font-bold text-muted-foreground uppercase tracking-widest pl-2">
             <div className="text-center">N°</div>
+            <div>Titre</div>
             <div>Provenance (URL)</div>
             <div className="text-right">Montant</div>
             <div className="text-right">Solde après</div>
@@ -525,7 +763,7 @@ function ProjectPage() {
                     transition={{ duration: 0.3, ease: 'easeInOut' }}
                     className="group overflow-hidden"
                   >
-                    <div className="flex flex-col md:grid md:grid-cols-[3rem_1fr_180px_180px_4rem] items-center gap-4 py-4 md:py-3 border border-border md:border-none md:border-b rounded-2xl md:rounded-none bg-card md:bg-transparent p-5 md:p-2 hover:bg-card/40 transition-colors">
+                    <div className="flex flex-col md:grid md:grid-cols-[3rem_200px_1fr_160px_160px_4rem] items-center gap-4 py-4 md:py-3 border border-border md:border-none md:border-b rounded-2xl md:rounded-none bg-card md:bg-transparent p-5 md:p-2 hover:bg-card/40 transition-colors">
                       <div className="hidden md:block text-center font-mono text-sm text-muted-foreground font-medium">
                         {(idx + 1).toString().padStart(2, '0')}
                       </div>
@@ -541,6 +779,17 @@ function ProjectPage() {
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
+                      </div>
+
+                      <div className="w-full relative flex items-center">
+                        <Tag className="w-4 h-4 text-muted-foreground absolute left-3 md:left-0" />
+                        <input
+                          type="text"
+                          value={row.title}
+                          onChange={(e) => updateRow(row.id, 'title', e.target.value)}
+                          placeholder="Ex : Loyer"
+                          className="w-full pl-9 md:pl-7 py-2 bg-transparent border-b border-transparent focus:border-primary/50 outline-none transition-colors font-sans font-medium text-foreground placeholder:text-muted-foreground/40 text-base md:text-sm"
+                        />
                       </div>
 
                       <div className="w-full relative flex items-center">
@@ -689,23 +938,79 @@ function ProjectPage() {
   );
 }
 
-function Router() {
+function ProtectedProjectsListPage() {
   return (
-    <Switch>
-      <Route path="/" component={HomePage} />
-      <Route path="/projects/:id" component={ProjectPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <Show when="signed-in">
+        <ProjectsListPage />
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/" />
+      </Show>
+    </>
+  );
+}
+
+function ProtectedProjectPage() {
+  return (
+    <>
+      <Show when="signed-in">
+        <ProjectPage />
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/" />
+      </Show>
+    </>
+  );
+}
+
+function ClerkProviderWithRoutes() {
+  const [, setLocation] = useLocation();
+
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      localization={{
+        signIn: {
+          start: {
+            title: 'Bon retour',
+            subtitle: 'Connecte-toi pour retrouver tes registres',
+          },
+        },
+        signUp: {
+          start: {
+            title: 'Crée ton compte',
+            subtitle: 'Commence à suivre tes retraits dès aujourd\u2019hui',
+          },
+        },
+      }}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
+        <Switch>
+          <Route path="/" component={HomeRedirect} />
+          <Route path="/sign-in/*?" component={SignInPage} />
+          <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route path="/projects" component={ProtectedProjectsListPage} />
+          <Route path="/projects/:id" component={ProtectedProjectPage} />
+          <Route component={NotFound} />
+        </Switch>
+      </QueryClientProvider>
+    </ClerkProvider>
   );
 }
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-        <Router />
-      </WouterRouter>
-    </QueryClientProvider>
+    <WouterRouter base={basePath}>
+      <ClerkProviderWithRoutes />
+    </WouterRouter>
   );
 }
 

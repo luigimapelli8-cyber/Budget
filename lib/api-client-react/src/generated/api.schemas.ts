@@ -33,6 +33,7 @@ export interface ProjectSummary {
 export interface Withdrawal {
   id: number;
   projectId: number;
+  title: string;
   amount: number;
   url: string;
   createdAt: string;
@@ -47,11 +48,13 @@ export interface ProjectDetail {
 }
 
 export interface WithdrawalInput {
+  title: string;
   amount: number;
   url: string;
 }
 
 export interface WithdrawalUpdate {
+  title?: string;
   amount?: number;
   url?: string;
 }

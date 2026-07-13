@@ -7,6 +7,7 @@
  */
 
 export interface WithdrawalUpdate {
+  title?: string;
   amount?: number;
   url?: string;
 }

@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const projectsTable = pgTable("projects", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
   name: text("name").notNull(),
   startingAmount: numeric("starting_amount", { precision: 14, scale: 2 })
     .notNull()
@@ -18,6 +19,7 @@ export const withdrawalsTable = pgTable("withdrawals", {
   projectId: integer("project_id")
     .notNull()
     .references(() => projectsTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull().default(""),
   amount: numeric("amount", { precision: 14, scale: 2 })
     .notNull()
     .$type<string>(),

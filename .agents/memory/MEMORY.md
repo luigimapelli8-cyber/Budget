@@ -1,0 +1,1 @@
+- [Clerk auth on user-scoped resources](clerk-user-scoping.md) — adding Clerk to an existing CRUD API: scope every row by userId and re-check ownership on nested resources (e.g. withdrawals under a project).

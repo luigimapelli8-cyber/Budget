@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, projectsTable, withdrawalsTable } from "@workspace/db";
 import {
   ListProjectsResponse,
@@ -12,10 +12,14 @@ import {
   UpdateProjectResponse,
   DeleteProjectParams,
 } from "@workspace/api-zod";
+import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/projects", async (_req, res): Promise<void> => {
+router.use(requireAuth);
+
+router.get("/projects", async (req, res): Promise<void> => {
+  const { userId } = req as unknown as AuthedRequest;
   const rows = await db
     .select({
       id: projectsTable.id,
@@ -27,6 +31,7 @@ router.get("/projects", async (_req, res): Promise<void> => {
     })
     .from(projectsTable)
     .leftJoin(withdrawalsTable, eq(withdrawalsTable.projectId, projectsTable.id))
+    .where(eq(projectsTable.userId, userId))
     .groupBy(projectsTable.id)
     .orderBy(projectsTable.createdAt);
 
@@ -43,6 +48,7 @@ router.get("/projects", async (_req, res): Promise<void> => {
 });
 
 router.post("/projects", async (req, res): Promise<void> => {
+  const { userId } = req as unknown as AuthedRequest;
   const parsed = CreateProjectBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -52,6 +58,7 @@ router.post("/projects", async (req, res): Promise<void> => {
   const [project] = await db
     .insert(projectsTable)
     .values({
+      userId,
       name: parsed.data.name,
       startingAmount: parsed.data.startingAmount.toString(),
     })
@@ -75,6 +82,7 @@ router.post("/projects", async (req, res): Promise<void> => {
 });
 
 router.get("/projects/:id", async (req, res): Promise<void> => {
+  const { userId } = req as unknown as AuthedRequest;
   const params = GetProjectParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -84,7 +92,7 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
   const [project] = await db
     .select()
     .from(projectsTable)
-    .where(eq(projectsTable.id, params.data.id));
+    .where(and(eq(projectsTable.id, params.data.id), eq(projectsTable.userId, userId)));
 
   if (!project) {
     res.status(404).json({ error: "Project not found" });
@@ -115,6 +123,7 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/projects/:id", async (req, res): Promise<void> => {
+  const { userId } = req as unknown as AuthedRequest;
   const params = UpdateProjectParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -136,7 +145,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   const [project] = await db
     .update(projectsTable)
     .set(updates)
-    .where(eq(projectsTable.id, params.data.id))
+    .where(and(eq(projectsTable.id, params.data.id), eq(projectsTable.userId, userId)))
     .returning();
 
   if (!project) {
@@ -169,6 +178,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/projects/:id", async (req, res): Promise<void> => {
+  const { userId } = req as unknown as AuthedRequest;
   const params = DeleteProjectParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -177,7 +187,7 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
 
   const [project] = await db
     .delete(projectsTable)
-    .where(eq(projectsTable.id, params.data.id))
+    .where(and(eq(projectsTable.id, params.data.id), eq(projectsTable.userId, userId)))
     .returning();
 
   if (!project) {
