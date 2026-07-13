@@ -114,6 +114,7 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
       withdrawals: withdrawals.map((w) => ({
         id: w.id,
         projectId: w.projectId,
+        title: w.title,
         amount: Number(w.amount),
         url: w.url,
         createdAt: w.createdAt,

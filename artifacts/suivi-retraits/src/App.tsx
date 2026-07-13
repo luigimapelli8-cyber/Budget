@@ -27,8 +27,6 @@ import {
   LogOut,
   Tag,
 } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import NotFound from '@/pages/not-found';
 import {
   useListProjects,
@@ -636,8 +634,14 @@ function ProjectPage() {
     setIsGenerating(true);
     setGenerateSuccess(false);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
+        // Loaded on demand: jsPDF + autotable are ~230KB gzipped and only needed here,
+        // so they're kept out of the main bundle to speed up initial page load.
+        const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+          import('jspdf'),
+          import('jspdf-autotable'),
+        ]);
         const doc = new jsPDF();
 
         doc.setFont('helvetica', 'bold');
