@@ -5,11 +5,8 @@ router = "application"
 deploymentTarget = "autoscale"
 
 [deployment.postBuild]
-args = ["pnpm", "install", "--frozen-lockfile"]
+args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
-
-[deployment.run]
-command = "pnpm run build && pnpm --filter @workspace/db push-force && pnpm --filter @workspace/api-server run start"
 
 [workflows]
 runButton = "Project"

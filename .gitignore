@@ -48,8 +48,5 @@ Thumbs.db
 .cache/
 .local/
 
-# Netlify
-.netlify/
-
 # Environment variables
 .env
