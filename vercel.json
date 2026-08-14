@@ -1,0 +1,17 @@
+{
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "artifacts/suivi-retraits/dist/public",
+  "installCommand": "pnpm install",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index"
+    }
+  ],
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "nodejs24.x"
+    }
+  }
+}
