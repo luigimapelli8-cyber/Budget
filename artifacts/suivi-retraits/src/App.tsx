@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Route, Switch, Router as WouterRouter, useLocation, useParams, Redirect } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   ClerkProvider,
   SignIn,
@@ -205,6 +207,25 @@ const formatAmountInput = (raw: string) => {
   return `${negative ? '-' : ''}${groupThousands(integerPart)}${decimalPart}`;
 };
 
+const normalizeAmountValue = (raw: string) => {
+  if (!raw) return '';
+
+  const negative = raw.trim().startsWith('-');
+  const cleaned = raw.replace(/[^\d.,]/g, '');
+  const separatorIndex = cleaned.search(/[.,]/);
+  let integerPart = separatorIndex === -1 ? cleaned : cleaned.slice(0, separatorIndex);
+  const decimalPart =
+    separatorIndex === -1
+      ? ''
+      : `.${cleaned.slice(separatorIndex + 1).replace(/[^\d]/g, '')}`;
+
+  // A new value typed after the initial "0" can arrive as "0480" on mobile.
+  // Normalize it before storing so the controlled input never turns it into 4800.
+  integerPart = integerPart.replace(/^0+(?=\d)/, '') || (decimalPart ? '0' : '');
+
+  return `${negative ? '-' : ''}${integerPart}${decimalPart}`;
+};
+
 // Controlled text input that displays a live "1 000 000"-style grouped value while
 // storing/emitting a plain numeric string (dot as decimal separator) via onValueChange.
 function AmountInput({
@@ -220,15 +241,32 @@ function AmountInput({
   placeholder?: string;
   autoFocus?: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <input
+      ref={inputRef}
       type="text"
       inputMode="decimal"
+      enterKeyHint="done"
       autoFocus={autoFocus}
-      value={formatAmountInput(value)}
+      value={isFocused ? value : formatAmountInput(value)}
+      onFocus={() => {
+        setIsFocused(true);
+        if (normalizeAmountValue(value) === '0') {
+          requestAnimationFrame(() => inputRef.current?.select());
+        }
+      }}
+      onBlur={() => setIsFocused(false)}
+      onPointerUp={() => {
+        if (normalizeAmountValue(value) === '0') {
+          inputRef.current?.select();
+        }
+      }}
       onChange={(e) => {
         const raw = e.target.value.replace(/\s/g, '').replace(',', '.');
-        onValueChange(raw.replace(/[^0-9.-]/g, ''));
+        onValueChange(normalizeAmountValue(raw.replace(/[^0-9.-]/g, '')));
       }}
       placeholder={placeholder}
       className={className}
@@ -759,14 +797,7 @@ function ProjectPage() {
     setIsGenerating(true);
     setGenerateSuccess(false);
 
-    setTimeout(async () => {
-      try {
-        // Loaded on demand: jsPDF + autotable are ~230KB gzipped and only needed here,
-        // so they're kept out of the main bundle to speed up initial page load.
-        const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-          import('jspdf'),
-          import('jspdf-autotable'),
-        ]);
+    try {
         const doc = new jsPDF({ orientation: 'landscape' });
 
         doc.setFont('helvetica', 'bold');
@@ -862,16 +893,26 @@ function ProjectPage() {
           { align: 'center' },
         );
 
-        doc.save(`${(projectName || 'registre').toLowerCase().replace(/\s+/g, '-')}.pdf`);
+        const fileName = `${(projectName || 'registre').toLowerCase().replace(/\s+/g, '-')}.pdf`;
+        const pdfBlob = doc.output('blob');
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = pdfUrl;
+        downloadLink.download = fileName;
+        downloadLink.rel = 'noopener';
+        downloadLink.style.display = 'none';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        downloadLink.remove();
+        window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
 
         setGenerateSuccess(true);
         setTimeout(() => setGenerateSuccess(false), 3000);
-      } catch (err) {
-        console.error('Failed to generate PDF', err);
-      } finally {
-        setIsGenerating(false);
-      }
-    }, 800);
+    } catch (err) {
+      console.error('Failed to generate PDF', err);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   if (isLoading || !project) {
