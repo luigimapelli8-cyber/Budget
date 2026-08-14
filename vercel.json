@@ -1,7 +1,7 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "pnpm run build",
   "outputDirectory": "artifacts/suivi-retraits/dist/public",
-  "installCommand": "npm install",
+  "installCommand": "pnpm install --no-frozen-lockfile --no-strict-peer-dependencies",
   "framework": null,
   "rewrites": [
     {
