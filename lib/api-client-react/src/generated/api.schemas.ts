@@ -70,6 +70,7 @@ export interface Withdrawal {
   id: number;
   projectId: number;
   title: string;
+  description?: string | null;
   type: TransactionType;
   amount: number;
   url: string;
@@ -89,6 +90,7 @@ export interface ProjectDetail {
 
 export interface WithdrawalInput {
   title: string;
+  description?: string | null;
   type?: TransactionType;
   amount: number;
   url: string;
@@ -99,6 +101,7 @@ export interface WithdrawalInput {
 
 export interface WithdrawalUpdate {
   title?: string;
+  description?: string | null;
   type?: TransactionType;
   amount?: number;
   url?: string;

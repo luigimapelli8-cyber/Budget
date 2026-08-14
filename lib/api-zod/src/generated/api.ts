@@ -69,6 +69,7 @@ export const GetProjectResponse = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "title": zod.string(),
+  "description": zod.string().nullish(),
   "type": zod.enum(['withdrawal', 'deposit']).describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number(),
   "url": zod.string(),
@@ -131,6 +132,7 @@ export const ListWithdrawalsResponseItem = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "title": zod.string(),
+  "description": zod.string().nullish(),
   "type": zod.enum(['withdrawal', 'deposit']).describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number(),
   "url": zod.string(),
@@ -156,6 +158,7 @@ export const CreateWithdrawalParams = zod.object({
 
 export const CreateWithdrawalBody = zod.object({
   "title": zod.string(),
+  "description": zod.string().nullish(),
   "type": zod.enum(['withdrawal', 'deposit']).optional().describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number(),
   "url": zod.string(),
@@ -168,6 +171,7 @@ export const CreateWithdrawalResponse = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "title": zod.string(),
+  "description": zod.string().nullish(),
   "type": zod.enum(['withdrawal', 'deposit']).describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number(),
   "url": zod.string(),
@@ -211,6 +215,7 @@ export const UpdateWithdrawalParams = zod.object({
 
 export const UpdateWithdrawalBody = zod.object({
   "title": zod.string().optional(),
+  "description": zod.string().nullish(),
   "type": zod.enum(['withdrawal', 'deposit']).optional().describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number().optional(),
   "url": zod.string().optional(),
@@ -223,6 +228,7 @@ export const UpdateWithdrawalResponse = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "title": zod.string(),
+  "description": zod.string().nullish(),
   "type": zod.enum(['withdrawal', 'deposit']).describe('Whether the entry withdraws money from the project or adds money to it'),
   "amount": zod.number(),
   "url": zod.string(),

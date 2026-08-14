@@ -13,6 +13,7 @@ export interface Withdrawal {
   id: number;
   projectId: number;
   title: string;
+  description?: string | null;
   type: TransactionType;
   amount: number;
   url: string;

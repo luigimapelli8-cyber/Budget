@@ -51,6 +51,7 @@ router.get("/projects/:id/withdrawals", async (req, res): Promise<void> => {
         id: w.id,
         projectId: w.projectId,
         title: w.title,
+        description: w.description,
         type: w.type,
         amount: Number(w.amount),
         url: w.url,
@@ -92,6 +93,7 @@ router.post("/projects/:id/withdrawals", async (req, res): Promise<void> => {
     .values({
       projectId: params.data.id,
       title: parsed.data.title,
+      description: parsed.data.description ?? null,
       type: parsed.data.type ?? "withdrawal",
       amount: parsed.data.amount.toString(),
       url: parsed.data.url,
@@ -113,6 +115,7 @@ router.post("/projects/:id/withdrawals", async (req, res): Promise<void> => {
       id: withdrawal.id,
       projectId: withdrawal.projectId,
       title: withdrawal.title,
+      description: withdrawal.description,
       type: withdrawal.type,
       amount: Number(withdrawal.amount),
       url: withdrawal.url,
@@ -162,6 +165,7 @@ router.patch("/withdrawals/:id", async (req, res): Promise<void> => {
 
   const updates: {
     title?: string;
+    description?: string | null;
     type?: string;
     amount?: string;
     url?: string;
@@ -170,6 +174,7 @@ router.patch("/withdrawals/:id", async (req, res): Promise<void> => {
     partnerUserId?: string | null;
   } = {};
   if (parsed.data.title !== undefined) updates.title = parsed.data.title;
+  if (parsed.data.description !== undefined) updates.description = parsed.data.description;
   if (parsed.data.type !== undefined) updates.type = parsed.data.type;
   if (parsed.data.amount !== undefined) updates.amount = parsed.data.amount.toString();
   if (parsed.data.url !== undefined) updates.url = parsed.data.url;
@@ -195,6 +200,7 @@ router.patch("/withdrawals/:id", async (req, res): Promise<void> => {
       id: withdrawal.id,
       projectId: withdrawal.projectId,
       title: withdrawal.title,
+      description: withdrawal.description,
       type: withdrawal.type,
       amount: Number(withdrawal.amount),
       url: withdrawal.url,

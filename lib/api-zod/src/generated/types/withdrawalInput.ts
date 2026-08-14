@@ -10,6 +10,7 @@ import type { TransactionType } from './transactionType';
 
 export interface WithdrawalInput {
   title: string;
+  description?: string | null;
   type?: TransactionType;
   amount: number;
   url: string;

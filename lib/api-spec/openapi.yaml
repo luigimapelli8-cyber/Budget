@@ -348,6 +348,9 @@ components:
           type: integer
         title:
           type: string
+        description:
+          type: string
+          nullable: true
         type:
           $ref: "#/components/schemas/TransactionType"
         amount:
@@ -372,6 +375,9 @@ components:
       properties:
         title:
           type: string
+        description:
+          type: string
+          nullable: true
         type:
           $ref: "#/components/schemas/TransactionType"
         amount:
@@ -391,6 +397,9 @@ components:
       properties:
         title:
           type: string
+        description:
+          type: string
+          nullable: true
         type:
           $ref: "#/components/schemas/TransactionType"
         amount:

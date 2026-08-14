@@ -31,6 +31,13 @@ import {
   Wallet,
   UserSearch,
   X,
+  CreditCard,
+  FileText,
+  ArrowRightLeft,
+  Banknote,
+  Ticket,
+  Utensils,
+  MoreHorizontal,
 } from 'lucide-react';
 import NotFound from '@/pages/not-found';
 import {
@@ -254,6 +261,19 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
 };
 
 const PAYMENT_METHOD_OPTIONS = Object.entries(PAYMENT_METHOD_LABELS) as [PaymentMethod, string][];
+
+const PAYMENT_METHOD_ICONS: Record<
+  PaymentMethod,
+  React.ComponentType<{ className?: string }>
+> = {
+  carte_debit: CreditCard,
+  cheque: FileText,
+  virement: ArrowRightLeft,
+  cash: Banknote,
+  cheque_vacances: Ticket,
+  carte_resto: Utensils,
+  autre: MoreHorizontal,
+};
 
 function partnerInitials(name: string) {
   return name
@@ -676,6 +696,7 @@ function ProjectsListPage() {
 type RowState = {
   id: number;
   title: string;
+  description: string;
   url: string;
   amount: string;
   type: TransactionType;
@@ -715,6 +736,7 @@ function ProjectPage() {
       project.withdrawals.map((w) => ({
         id: w.id,
         title: w.title,
+        description: w.description ?? '',
         url: w.url,
         amount: String(w.amount),
         type: w.type,
@@ -741,13 +763,15 @@ function ProjectPage() {
   }, 600);
 
   const saveWithdrawal = useDebouncedCallback(
-    (id: number, field: 'title' | 'amount' | 'url', value: string) => {
+    (id: number, field: 'title' | 'amount' | 'url' | 'description', value: string) => {
       const data =
         field === 'amount'
           ? { amount: parseFloat(value) || 0 }
           : field === 'title'
             ? { title: value }
-            : { url: value };
+            : field === 'description'
+              ? { description: value || null }
+              : { url: value };
       updateWithdrawal.mutate({ id, data }, { onSuccess: invalidate });
     },
     600,
@@ -792,6 +816,7 @@ function ProjectPage() {
             {
               id: withdrawal.id,
               title: '',
+              description: '',
               url: '',
               amount: '0',
               type: 'withdrawal',
@@ -811,7 +836,7 @@ function ProjectPage() {
     deleteWithdrawal.mutate({ id }, { onSuccess: invalidate });
   };
 
-  const updateRow = (id: number, field: 'title' | 'url' | 'amount', value: string) => {
+  const updateRow = (id: number, field: 'title' | 'url' | 'amount' | 'description', value: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
     saveWithdrawal(id, field, value);
   };
@@ -891,6 +916,7 @@ function ProjectPage() {
             (idx + 1).toString().padStart(2, '0'),
             formatDateShort(new Date(`${row.date}T00:00:00.000Z`)),
             row.title || '—',
+            row.description || '—',
             isDeposit ? 'Ajout' : 'Retrait',
             row.url || '—',
             PAYMENT_METHOD_LABELS[row.paymentMethod],
@@ -903,7 +929,18 @@ function ProjectPage() {
         autoTable(doc, {
           startY: 52,
           head: [
-            ['N°', 'Date', 'Titre', 'Type', 'Provenance (URL)', 'Mode', 'Partenaire', 'Montant', 'Solde'],
+            [
+              'N°',
+              'Date',
+              'Titre',
+              'Description',
+              'Type',
+              'Provenance (URL)',
+              'Mode',
+              'Partenaire',
+              'Montant',
+              'Solde',
+            ],
           ],
           body: tableBody,
           theme: 'grid',
@@ -912,12 +949,12 @@ function ProjectPage() {
           bodyStyles: { textColor: [54, 49, 46] },
           columnStyles: {
             0: { cellWidth: 10, halign: 'center' },
-            7: { halign: 'right' },
-            8: { halign: 'right', fontStyle: 'bold' },
+            8: { halign: 'right' },
+            9: { halign: 'right', fontStyle: 'bold' },
           },
           didParseCell: (data) => {
-            if (data.section === 'body' && data.column.index === 7) {
-              const isDeposit = tableBody[data.row.index]?.[3] === 'Ajout';
+            if (data.section === 'body' && data.column.index === 8) {
+              const isDeposit = tableBody[data.row.index]?.[4] === 'Ajout';
               data.cell.styles.textColor = isDeposit ? [77, 128, 92] : [200, 50, 50];
             }
           },
@@ -1083,14 +1120,23 @@ function ProjectPage() {
                           </button>
                         </div>
 
-                        <div className="w-full relative flex items-center">
-                          <Tag className="w-4 h-4 text-muted-foreground absolute left-3 md:left-0" />
+                        <div className="w-full">
+                          <div className="relative flex items-center">
+                            <Tag className="w-4 h-4 text-muted-foreground absolute left-3 md:left-0" />
+                            <input
+                              type="text"
+                              value={row.title}
+                              onChange={(e) => updateRow(row.id, 'title', e.target.value)}
+                              placeholder="Ex : Loyer"
+                              className="w-full pl-9 md:pl-7 py-2 bg-transparent border-b border-transparent focus:border-primary/50 outline-none transition-colors font-sans font-medium text-foreground placeholder:text-muted-foreground/40 text-base md:text-sm"
+                            />
+                          </div>
                           <input
                             type="text"
-                            value={row.title}
-                            onChange={(e) => updateRow(row.id, 'title', e.target.value)}
-                            placeholder="Ex : Loyer"
-                            className="w-full pl-9 md:pl-7 py-2 bg-transparent border-b border-transparent focus:border-primary/50 outline-none transition-colors font-sans font-medium text-foreground placeholder:text-muted-foreground/40 text-base md:text-sm"
+                            value={row.description}
+                            onChange={(e) => updateRow(row.id, 'description', e.target.value)}
+                            placeholder="Description courte (facultatif)"
+                            className="w-full pl-9 md:pl-7 py-0.5 bg-transparent border-b border-transparent focus:border-primary/30 outline-none transition-colors font-sans text-muted-foreground placeholder:text-muted-foreground/40 text-sm md:text-xs"
                           />
                         </div>
 
@@ -1198,13 +1244,22 @@ function ProjectPage() {
                               updateRowPaymentMethod(row.id, value as PaymentMethod)
                             }
                           >
-                            <SelectTrigger className="h-8 w-[170px] border-none shadow-none bg-transparent px-0 text-sm focus:ring-0">
+                            <SelectTrigger className="h-9 w-[190px] rounded-lg border-border/70 bg-card px-3 text-sm shadow-sm hover:border-primary/40 focus:ring-2 focus:ring-primary/20">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="w-[220px] p-1.5">
+                              <div className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Mode de paiement
+                              </div>
                               {PAYMENT_METHOD_OPTIONS.map(([value, label]) => (
                                 <SelectItem key={value} value={value}>
-                                  {label}
+                                  <span className="flex items-center gap-2.5">
+                                    {(() => {
+                                      const Icon = PAYMENT_METHOD_ICONS[value];
+                                      return <Icon className="h-4 w-4 text-primary/80" />;
+                                    })()}
+                                    <span>{label}</span>
+                                  </span>
                                 </SelectItem>
                               ))}
                             </SelectContent>

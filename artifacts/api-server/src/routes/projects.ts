@@ -118,6 +118,7 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
         id: w.id,
         projectId: w.projectId,
         title: w.title,
+        description: w.description,
         type: w.type,
         amount: Number(w.amount),
         url: w.url,

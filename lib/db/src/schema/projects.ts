@@ -20,6 +20,8 @@ export const withdrawalsTable = pgTable("withdrawals", {
     .notNull()
     .references(() => projectsTable.id, { onDelete: "cascade" }),
   title: text("title").notNull().default(""),
+  // Optional short free-text note about the transaction, separate from the title.
+  description: text("description"),
   // "withdrawal" subtracts amount from the running balance, "deposit" adds it.
   type: text("type").notNull().default("withdrawal"),
   amount: numeric("amount", { precision: 14, scale: 2 })
