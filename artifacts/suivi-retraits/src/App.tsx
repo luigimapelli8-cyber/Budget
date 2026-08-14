@@ -173,6 +173,19 @@ const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(val);
 };
 
+// jsPDF's built-in Helvetica font can render French narrow non-breaking spaces
+// incorrectly (sometimes as a slash). Use regular spaces in exported PDFs.
+const formatPdfCurrency = (val: number) => {
+  const number = new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+    .format(val)
+    .replace(/[\u00a0\u202f]/g, ' ');
+
+  return `${number} €`;
+};
+
 // Groups the integer part of a raw number string by thousands with a plain space,
 // e.g. "1000000" -> "1 000 000". Keeps a single decimal separator (comma or dot) intact.
 const groupThousands = (integerPart: string) => integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -773,7 +786,7 @@ function ProjectPage() {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(14);
         doc.setTextColor(77, 128, 92);
-        doc.text(`Somme de départ : ${formatCurrency(startingValue)}`, 14, 45);
+        doc.text(`Somme de départ : ${formatPdfCurrency(startingValue)}`, 14, 45);
 
         const tableBody = rowsWithBalance.map((row, idx) => {
           const amount = parseFloat(row.amount) || 0;
@@ -787,8 +800,8 @@ function ProjectPage() {
             row.url || '—',
             PAYMENT_METHOD_LABELS[row.paymentMethod],
             row.partner?.name || '—',
-            `${isDeposit ? '+' : '-'} ${formatCurrency(amount)}`,
-            formatCurrency(row.balanceAfter),
+            `${isDeposit ? '+' : '-'} ${formatPdfCurrency(amount)}`,
+            formatPdfCurrency(row.balanceAfter),
           ];
         });
 
@@ -837,7 +850,7 @@ function ProjectPage() {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(16);
         doc.setTextColor(54, 49, 46);
-        doc.text(`Solde final : ${formatCurrency(finalBalance)}`, 14, finalY + 20);
+        doc.text(`Solde final : ${formatPdfCurrency(finalBalance)}`, 14, finalY + 20);
 
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(9);
