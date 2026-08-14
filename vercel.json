@@ -1,7 +1,7 @@
 {
   "buildCommand": "pnpm run build",
   "outputDirectory": "artifacts/suivi-retraits/dist/public",
-  "installCommand": "pnpm install --no-frozen-lockfile --no-strict-peer-dependencies",
+  "installCommand": "corepack enable && corepack prepare pnpm@9 --activate && pnpm install --no-frozen-lockfile",
   "framework": null,
   "rewrites": [
     {
